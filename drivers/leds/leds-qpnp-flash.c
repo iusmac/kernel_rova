@@ -2611,6 +2611,7 @@ static int qpnp_flash_led_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_DEBUG_FS
 	root = debugfs_create_dir("flashLED", NULL);
+#ifdef CONFIG_DEBUG_FS
 	if (IS_ERR_OR_NULL(root)) {
 		pr_err("Error creating top level directory err%ld",
 			(long)root);
@@ -2618,6 +2619,7 @@ static int qpnp_flash_led_probe(struct platform_device *pdev)
 			pr_err("debugfs is not enabled in kernel");
 		goto error_free_led_sysfs;
 	}
+#endif
 
 	led->dbgfs_root = root;
 	file = debugfs_create_file("enable_debug", 0600, root, led,
