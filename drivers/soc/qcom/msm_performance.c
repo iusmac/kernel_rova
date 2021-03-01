@@ -25,6 +25,7 @@
 #include <linux/module.h>
 #include <linux/input.h>
 #include <linux/kthread.h>
+#include <linux/battery_saver.h>
 
 
 /* To handle cpufreq min/max request */
@@ -52,19 +53,24 @@ static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
 	int i, j, ntokens = 0;
 	unsigned int val, cpu;
 	const char *cp = buf;
+	const char *disable = "0:0 4:0";
 	struct cpu_status *i_cpu_stats;
 	struct cpufreq_policy policy;
 	cpumask_var_t limit_mask;
 	int ret;
 
+	if (is_battery_saver_on())
+		cp = disable;
+
 	while ((cp = strpbrk(cp + 1, " :")))
 		ntokens++;
+
+	cp = is_battery_saver_on() ? disable : buf;
 
 	/* CPU:value pair */
 	if (!(ntokens % 2))
 		return -EINVAL;
 
-	cp = buf;
 	cpumask_clear(limit_mask);
 	for (i = 0; i < ntokens; i += 2) {
 		if (sscanf(cp, "%u:%u", &cpu, &val) != 2)
