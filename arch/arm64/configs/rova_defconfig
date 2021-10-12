@@ -860,3 +860,6 @@ CONFIG_SUSPEND_SKIP_SYNC=y
 
 # FAIR Scheuler tunables
 CONFIG_PELT_UTIL_HALFLIFE_16=y
+
+# Default contiguous memory area size
+CONFIG_CMA_SIZE_MBYTES=20
