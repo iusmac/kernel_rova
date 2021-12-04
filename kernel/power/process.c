@@ -23,6 +23,7 @@
 
 /*
  * Timeout for stopping processes
+ * Put a lower value coz we need to freeze stuffs more
  */
 unsigned int __read_mostly freeze_timeout_msecs = 2 * MSEC_PER_SEC;
 
