@@ -251,6 +251,29 @@ static int focal_i2c_Write(unsigned char *writebuf, int writelen)
 }
 #endif
 
+static ssize_t ft5x06_ts_disable_keys_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+	const char c = data->disable_keys ? '1' : '0';
+	return sprintf(buf, "%c\n", c);
+}
+
+static ssize_t ft5x06_ts_disable_keys_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		data->disable_keys = (i == 1);
+		return count;
+	} else {
+		dev_err(dev, "disable_keys write error\n");
+		return -EINVAL;
+	}
+}
+
 static int ft5x06_i2c_read(struct i2c_client *client, char *writebuf,
 						int writelen, char *readbuf, int readlen)
 {
@@ -515,6 +538,12 @@ static irqreturn_t ft5x06_ts_interrupt(int irq, void *dev_id)
 			break;
 
 		input_mt_slot(ip_dev, id);
+
+		if (data->disable_keys && x > data->pdata->panel_maxx &&
+			y > data->pdata->panel_maxy) {
+			break;
+		}
+
 		if (status == FT_TOUCH_DOWN || status == FT_TOUCH_CONTACT) {
 			input_mt_report_slot_state(ip_dev, MT_TOOL_FINGER, 1);
 			input_report_abs(ip_dev, ABS_MT_POSITION_X, x);
@@ -2792,6 +2821,60 @@ static int get_boot_mode(struct i2c_client *client)
 extern bool xiaomi_ts_probed;
 #endif
 
+static DEVICE_ATTR(disable_keys, S_IWUSR | S_IRUSR, ft5x06_ts_disable_keys_show,
+			ft5x06_ts_disable_keys_store);
+
+static struct attribute *ft5x06_ts_attrs[] = {
+	&dev_attr_disable_keys.attr,
+	NULL
+};
+
+static const struct attribute_group ft5x06_ts_attr_group = {
+	.attrs = ft5x06_ts_attrs,
+};
+
+static int ft5x06_proc_init(struct kernfs_node *sysfs_node_parent)
+{
+	int len, ret = 0;
+	char *buf;
+	char *key_disabler_sysfs_node;
+	struct proc_dir_entry *proc_entry_tp = NULL;
+	struct proc_dir_entry *proc_symlink_tmp = NULL;
+
+	buf = kzalloc(PATH_MAX, GFP_KERNEL);
+	if (buf) {
+		len = kernfs_path_from_node(sysfs_node_parent, NULL, buf, PATH_MAX);
+		if (unlikely(len >= PATH_MAX)) {
+			pr_err("%s: Buffer is too long: %d\n", __func__, len);
+			ret = -ERANGE;
+			goto exit;
+		}
+	}
+
+	proc_entry_tp = proc_mkdir("touchpanel", NULL);
+	if (proc_entry_tp == NULL) {
+		pr_err("%s: Couldn't create touchpanel dir in procfs\n", __func__);
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	key_disabler_sysfs_node = kzalloc(PATH_MAX, GFP_KERNEL);
+	if (key_disabler_sysfs_node)
+		sprintf(key_disabler_sysfs_node, "/sys%s/%s", buf, "disable_keys");
+	proc_symlink_tmp = proc_symlink("capacitive_keys_disable",
+			proc_entry_tp, key_disabler_sysfs_node);
+	if (proc_symlink_tmp == NULL) {
+		pr_err("%s: Couldn't create capacitive_keys_enable symlink\n", __func__);
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+exit:
+	kfree(buf);
+	kfree(key_disabler_sysfs_node);
+	return ret;
+}
+
 static int ft5x06_ts_probe(struct i2c_client *client,
 						const struct i2c_device_id *id)
 {
@@ -3174,6 +3257,13 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 		CTP_DEBUG("tp battery supply not found\n");
 #endif
 
+	err = sysfs_create_group(&client->dev.kobj, &ft5x06_ts_attr_group);
+	if (err) {
+		dev_err(&client->dev, "Failure %d creating sysfs group\n", err);
+		goto free_reset_gpio;
+	}
+
+	ft5x06_proc_init(client->dev.kobj.sd);
 	enable_irq(data->client->irq);
 
 #ifdef CONFIG_MACH_XIAOMI
@@ -3246,6 +3336,8 @@ static int ft5x06_ts_remove(struct i2c_client *client)
 		if (retval < 0)
 			CTP_ERROR("Cannot get idle pinctrl state\n");
 	}
+	sysfs_remove_group(&client->dev.kobj, &ft5x06_ts_attr_group);
+
 	input_unregister_device(data->input_dev);
 
 #ifdef CONFIG_MACH_XIAOMI
