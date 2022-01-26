@@ -950,7 +950,7 @@ static int smb358_get_prop_batt_capacity(struct smb358_charger *chip)
 	if (cw2015_psy) {
 		power_supply_get_property(cw2015_psy,
 				POWER_SUPPLY_PROP_CAPACITY, &ret);
-		dev_err(chip->dev, "CW2015_BATTERY_CAPACITY IS:%d\n", ret.intval);
+		dev_dbg(chip->dev, "CW2015_BATTERY_CAPACITY IS:%d\n", ret.intval);
 		return ret.intval;
 	}
 
@@ -1029,7 +1029,7 @@ static int smb358_get_prop_batt_temp(struct smb358_charger *chip)
 		pr_debug("Unable to read batt temperature rc=%d\n", rc);
 		return DEFAULT_TEMP;
 	}
-	pr_err("get_bat_temp %d, %lld\n",
+	pr_debug("get_bat_temp %d, %lld\n",
 		results.adc_code, results.physical);
 
 	return (int)results.physical/100;
@@ -1048,7 +1048,7 @@ int smb358_get_prop_battid_resister(struct smb358_charger *chip)
 		return DEFAULT_RESISTER;
 	}
 	battid_resister = (results.physical)*68/(1800000 - results.physical);
-	pr_err("battid_resister = %d\n", battid_resister);
+	pr_debug("battid_resister = %d\n", battid_resister);
 
 	return battid_resister;
 }
@@ -1066,7 +1066,7 @@ static int smb358_get_prop_battery_voltage_now(struct smb358_charger *chip)
 	if (cw2015_psy) {
 		power_supply_get_property(cw2015_psy,
 				POWER_SUPPLY_PROP_VOLTAGE_NOW, &ret);
-		pr_err("POWER_SUPPLY_PROP_VOLTAGE_NOW IS:%d\n", ret.intval);
+		pr_debug("POWER_SUPPLY_PROP_VOLTAGE_NOW IS:%d\n", ret.intval);
 		return ret.intval;
 	}
 	pr_debug("Couldn't get bms_psy, return default capacity\n");
@@ -2163,7 +2163,7 @@ static int smb_parse_dt_battery(struct smb358_charger *chip)
 	else {
 		chip->battery_type = default_batt_type;
 	}
-	dev_err(chip->dev, "found battery type is %s\n", chip->battery_type);
+	dev_dbg(chip->dev, "found battery type is %s\n", chip->battery_type);
 	return 0;
 }
 
