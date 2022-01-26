@@ -68,6 +68,83 @@ static int gtp_init_ext_watchdog(struct i2c_client *client);
 
 static int gesture_done_flag = 1;
 
+static bool disable_keys_feature = false;
+
+static ssize_t gtp_ts_disable_keys_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	const char c = disable_keys_feature ? '1' : '0';
+	return sprintf(buf, "%c\n", c);
+}
+
+static ssize_t gtp_ts_disable_keys_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int i;
+
+	if (sscanf(buf, "%u", &i) == 1 && i < 2) {
+		disable_keys_feature = (i == 1);
+		return count;
+	} else {
+		dev_err(dev, "disable_keys write error\n");
+		return -EINVAL;
+	}
+}
+
+static DEVICE_ATTR(disable_keys, S_IWUSR | S_IRUSR, gtp_ts_disable_keys_show,
+		gtp_ts_disable_keys_store);
+
+static struct attribute *gtp_ts_attrs[] = {
+	&dev_attr_disable_keys.attr,
+	NULL
+};
+
+static const struct attribute_group gtp_ts_attr_group = {
+	.attrs = gtp_ts_attrs,
+};
+
+static int gtp_proc_init(struct kernfs_node *sysfs_node_parent)
+{
+	int len, ret = 0;
+	char *buf;
+	char *key_disabler_sysfs_node;
+	struct proc_dir_entry *proc_entry_tp = NULL;
+	struct proc_dir_entry *proc_symlink_tmp = NULL;
+
+	buf = kzalloc(PATH_MAX, GFP_KERNEL);
+	if (buf) {
+		len = kernfs_path_from_node(sysfs_node_parent, NULL, buf, PATH_MAX);
+		if (unlikely(len >= PATH_MAX)) {
+			pr_err("%s: Buffer is too long: %d\n", __func__, len);
+			ret = -ERANGE;
+			goto exit;
+		}
+	}
+
+	proc_entry_tp = proc_mkdir("touchpanel", NULL);
+	if (proc_entry_tp == NULL) {
+		pr_err("%s: Couldn't create touchpanel dir in procfs\n", __func__);
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	key_disabler_sysfs_node = kzalloc(PATH_MAX, GFP_KERNEL);
+	if (key_disabler_sysfs_node)
+		sprintf(key_disabler_sysfs_node, "/sys%s/%s", buf, "disable_keys");
+	proc_symlink_tmp = proc_symlink("capacitive_keys_disable",
+			proc_entry_tp, key_disabler_sysfs_node);
+	if (proc_symlink_tmp == NULL) {
+		pr_err("%s: Couldn't create capacitive_keys_enable symlink\n", __func__);
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+exit:
+	kfree(buf);
+	kfree(key_disabler_sysfs_node);
+	return ret;
+}
+
 /*
  * return: 2 - ok, < 0 - i2c transfer error
  */
@@ -626,11 +703,14 @@ static void gtp_work_func(struct goodix_ts_data *ts)
 		pre_key = key_value;
 	} else if (key_value & 0x0f || pre_key & 0x0f) {
 		/* panel key */
-		for (i = 0; i < ts->pdata->key_nums; i++) {
-			if ((pre_key | key_value) & (0x01 << i))
-				input_report_key(ts->input_dev,
-						 ts->pdata->key_map[i],
-						 key_value & (0x01 << i));
+		if (!disable_keys_feature) {
+			for (i = 0; i < ts->pdata->key_nums; i++) {
+				if ((pre_key | key_value) & (0x01 << i)) {
+					input_report_key(ts->input_dev,
+							ts->pdata->key_map[i],
+							key_value & (0x01 << i));
+				}
+			}
 		}
 		input_sync(ts->input_dev);
 		pre_key = key_value;
@@ -2210,6 +2290,13 @@ static int gtp_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	ts->init_done = true;
 	gtp_work_control_enable(ts, true);
 
+	ret = sysfs_create_group(&client->dev.kobj, &gtp_ts_attr_group);
+	if (ret) {
+		dev_err(&client->dev, "Failure %d creating sysfs group\n", ret);
+		sysfs_remove_group(&client->dev.kobj, &gtp_ts_attr_group);
+	}
+	gtp_proc_init(client->dev.kobj.sd);
+
 #ifdef CONFIG_MACH_XIAOMI
 	xiaomi_ts_probed = true;
 #endif
@@ -2274,6 +2361,7 @@ static int gtp_drv_remove(struct i2c_client *client)
 	gtp_pinctrl_deinit(ts);
 	dev_info(&client->dev, "goodix ts driver removed");
 	i2c_set_clientdata(client, NULL);
+	sysfs_remove_group(&client->dev.kobj, &gtp_ts_attr_group);
 	input_unregister_device(ts->input_dev);
 	mutex_destroy(&ts->lock);
 

@@ -59,7 +59,7 @@ static inline int xiaomi_dt2w_proc_init(char *control_node_path) {
 
 	pr_info("%s: control_node_path parameter is %s", __func__, control_node_path);
 
-	if (true) {
+	if (false) {
 		xiaomi_dt2w_proc_node[0].dir="gesture";
 		xiaomi_dt2w_proc_node[0].file="onoff";
 		xiaomi_dt2w_proc_node[1].dir="touchpanel";
