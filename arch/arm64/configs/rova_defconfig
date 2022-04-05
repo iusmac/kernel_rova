@@ -789,3 +789,6 @@ CONFIG_BIG_CPU_MASK=0
 # CONFIG_LTO_NONE is not set
 # CONFIG_LTO_CLANG is not set
 CONFIG_LLVM_POLLY=y
+
+# Sustained battery saver
+CONFIG_BATTERY_SAVER=y
