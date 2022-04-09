@@ -539,8 +539,7 @@ static irqreturn_t ft5x06_ts_interrupt(int irq, void *dev_id)
 
 		input_mt_slot(ip_dev, id);
 
-		if (data->disable_keys && x > data->pdata->panel_maxx &&
-			y > data->pdata->panel_maxy) {
+		if (data->disable_keys && y > data->pdata->panel_maxy) {
 			break;
 		}
 
