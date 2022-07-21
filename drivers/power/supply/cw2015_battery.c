@@ -589,21 +589,7 @@ static void rk_bat_update_status(struct cw_battery *cw_bat)
 {
 	int status;
 	union power_supply_propval ret = {0,};
-
-
-
-
-	if (!charge_psy) {
-		charge_psy = power_supply_get_by_name("usb");
-	} else{
-		is_charger_plug = (u8)power_supply_get_battery_charge_state(charge_psy);
-	}
-
-	pr_debug("Chaman for test is_charger_plug %d\n", is_charger_plug);
-	if (is_charger_plug == 0)
-		cw_bat->charger_mode =  POWER_SUPPLY_TYPE_UNKNOWN;
-	else
-		cw_bat->charger_mode = USB_CHARGER_MODE;
+	u8 is_charging_enabled = 1;
 
 	if (cw_bat->batt_psy == NULL)
 		cw_bat->batt_psy = power_supply_get_by_name("battery");
@@ -612,11 +598,31 @@ static void rk_bat_update_status(struct cw_battery *cw_bat)
 		power_supply_get_property(cw_bat->batt_psy,
 					POWER_SUPPLY_PROP_STATUS, &ret);
 		status = ret.intval;
+
+		power_supply_get_property(cw_bat->batt_psy,
+					POWER_SUPPLY_PROP_CHARGING_ENABLED, &ret);
+		is_charging_enabled = (u8)ret.intval;
 	} else{
 		/* Default to false if the battery power supply is not registered. */
 		pr_debug("battery power supply is not registered\n");
 		status = POWER_SUPPLY_STATUS_UNKNOWN;
 	}
+
+	if (!charge_psy) {
+		charge_psy = power_supply_get_by_name("usb");
+	} else if (is_charging_enabled) {
+		is_charger_plug = (u8)power_supply_get_battery_charge_state(charge_psy);
+	} else {
+		/* handle case when charger is still plugged in but charging is
+		 * software disabled */
+		is_charger_plug = 0;
+	}
+
+	pr_debug("Chaman for test is_charger_plug %d\n", is_charger_plug);
+	if (is_charger_plug == 0)
+		cw_bat->charger_mode = POWER_SUPPLY_TYPE_UNKNOWN;
+	else
+		cw_bat->charger_mode = USB_CHARGER_MODE;
 
 	if (cw_bat->status != status) {
 		cw_bat->status = status;
