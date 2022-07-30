@@ -74,7 +74,7 @@ config SECURITY_SELINUX_DEVELOP
 config SECURITY_SELINUX_AVC_STATS
 	bool "NSA SELinux AVC Statistics"
 	depends on SECURITY_SELINUX
-	default y
+	default n
 	help
 	  This option collects access vector cache statistics to
 	  /selinux/avc/cache_stats, which may be monitored via
