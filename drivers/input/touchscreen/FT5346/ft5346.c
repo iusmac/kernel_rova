@@ -34,6 +34,8 @@
 #include <linux/fs.h>
 #include <asm/uaccess.h>
 
+#include "ft5346.h"
+
 #ifdef CONFIG_TOUCHSCREEN_XIAOMI_DT2W
 #include <linux/input/xiaomi_dt2w.h>
 #endif
@@ -72,6 +74,8 @@ unsigned short coordinate_y[150] = {0};
 #include <linux/xiaomi_series.h>
 extern int xiaomi_series_read(void);
 #endif
+
+static struct ft5x06_ts_data *ts_data_g = NULL;
 
 static u8 lockdown_info[FT_LOCKDOWN_SIZE];
 
@@ -1260,6 +1264,25 @@ static int ft5x06_fw_upgrade_start(struct i2c_client *client,
 
 	return 0;
 }
+
+#ifdef CONFIG_POCKET_JUDGE
+void ft5x06_ts_inpocket_set(bool active)
+{
+	struct ft5x06_ts_data *ts = ts_data_g;
+
+	if (!ts || !ts->client->irq)
+		return;
+
+	mutex_lock(&fts_mutex);
+
+	if (active)
+		disable_irq(ts->client->irq);
+	else
+		enable_irq(ts->client->irq);
+
+	mutex_unlock(&fts_mutex);
+}
+#endif /* CONFIG_POCKET_JUDGE */
 
 #if TPD_AUTO_UPGRADE || WT_ADD_CTP_INFO
 static void fts_get_upgrade_array(struct i2c_client *client)
@@ -2820,6 +2843,8 @@ static int get_boot_mode(struct i2c_client *client)
 extern bool xiaomi_ts_probed;
 #endif
 
+extern bool ft5346_ts_probed;
+
 static DEVICE_ATTR(disable_keys, S_IWUSR | S_IRUSR, ft5x06_ts_disable_keys_show,
 			ft5x06_ts_disable_keys_store);
 
@@ -2878,7 +2903,7 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 						const struct i2c_device_id *id)
 {
 	struct ft5x06_ts_platform_data *pdata;
-	struct ft5x06_ts_data *data;
+	struct ft5x06_ts_data *data = NULL;
 	struct input_dev *input_dev;
 	struct dentry *temp;
 	u8 reg_value;
@@ -3268,6 +3293,9 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 #ifdef CONFIG_MACH_XIAOMI
 	xiaomi_ts_probed = true;
 #endif
+
+	ft5346_ts_probed = true;
+	ts_data_g = data;
 
 	return 0;
 

@@ -18,6 +18,9 @@
 bool xiaomi_ts_probed = false;
 #endif
 
+bool ft5346_ts_probed = false;
+bool gt9xx_ts_probed = false;
+
 static bool touchscreen_get_prop_u32(struct device *dev,
 				     const char *property,
 				     unsigned int default_value,

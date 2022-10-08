@@ -389,4 +389,8 @@ extern s32 gtp_fw_startup(struct i2c_client *client);
 extern int gtp_ascii_to_array(const u8 *src_buf, int src_len, u8 *dst_buf);
 /*********** For gt9xx_update End *********/
 
+#ifdef CONFIG_POCKET_JUDGE
+void gtp_ts_inpocket_set(bool active);
+#endif
+
 #endif /* _GOODIX_GT9XX_H_ */
