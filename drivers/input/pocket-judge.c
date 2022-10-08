@@ -17,6 +17,9 @@
 
 #include "pocket-judge.h"
 
+#include "touchscreen/FT5346/ft5346.h"
+#include "touchscreen/gt9xx_v2.8/gt9xx.h"
+
 /**
  * This driver maintains a sysfs interface used by the pocket bridge system
  * service. It enables and disables interrupts based on pocket state to
@@ -26,11 +29,19 @@
  * @hide
  */
 
+extern bool ft5346_ts_probed;
+extern bool gt9xx_ts_probed;
+
 static char pocket_judge_inpocket_state = '0';
 static bool pocket_judge_inpocket = false;
 
 static void pocket_judge_update(void)
 {
+	if (ft5346_ts_probed)
+		ft5x06_ts_inpocket_set(pocket_judge_inpocket);
+
+	if (gt9xx_ts_probed)
+		gtp_ts_inpocket_set(pocket_judge_inpocket);
 }
 
 bool pocket_judge_isInPocket(void) {

@@ -51,6 +51,8 @@ static const char *goodix_input_phys = "input/ts";
 struct i2c_client *i2c_connect_client;
 static struct proc_dir_entry *gtp_config_proc;
 
+static struct goodix_ts_data *ts_data_g = NULL;
+
 enum doze {
 	DOZE_DISABLED = 0,
 	DOZE_ENABLED = 1,
@@ -2171,6 +2173,8 @@ static void gtp_shutdown(struct i2c_client *client)
 extern bool xiaomi_ts_probed;
 #endif
 
+extern bool gt9xx_ts_probed;
+
 static int gtp_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int ret = -1;
@@ -2350,6 +2354,9 @@ static int gtp_probe(struct i2c_client *client, const struct i2c_device_id *id)
 #ifdef CONFIG_MACH_XIAOMI
 	xiaomi_ts_probed = true;
 #endif
+
+	gt9xx_ts_probed = true;
+	ts_data_g = ts;
 
 	return 0;
 
@@ -2662,6 +2669,25 @@ static int gtp_unregister_powermanager(struct goodix_ts_data *ts)
 
 	return 0;
 }
+
+#ifdef CONFIG_POCKET_JUDGE
+void gtp_ts_inpocket_set(bool active)
+{
+	struct goodix_ts_data *ts = ts_data_g;
+
+	if (!ts || !ts->client->irq)
+		return;
+
+	mutex_lock(&ts->lock);
+
+	if (active)
+		disable_irq(ts->client->irq);
+	else
+		enable_irq(ts->client->irq);
+
+	mutex_unlock(&ts->lock);
+}
+#endif /* CONFIG_POCKET_JUDGE */
 
 /*******************************************************
  * Function:
