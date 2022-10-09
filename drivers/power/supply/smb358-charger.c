@@ -969,7 +969,7 @@ static int get_prop_current_now(struct smb358_charger *chip)
 		} else {
 			dev_dbg(chip->dev, "No BMS supply registered return 0\n");
 		}
-	return 1000;
+	return ret.intval;
 }
 
 static int smb358_get_prop_charge_type(struct smb358_charger *chip)
