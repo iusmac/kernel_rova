@@ -72,7 +72,7 @@ static struct task_struct *cpu_boost_worker_thread;
 static struct kthread_worker powerkey_cpu_boost_worker;
 static struct task_struct *powerkey_cpu_boost_worker_thread;
 
-#define MIN_INPUT_INTERVAL (100 * USEC_PER_MSEC)
+#define MIN_INPUT_INTERVAL (250 * USEC_PER_MSEC)
 #define MAX_NAME_LENGTH 64
 
 static int set_input_boost_freq(const char *buf, const struct kernel_param *kp)
