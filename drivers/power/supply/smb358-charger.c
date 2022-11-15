@@ -2472,7 +2472,15 @@ static int smb358_usb_set_property(struct power_supply *psy,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_SDP_CURRENT_MAX:
-		chip->usb_psy_ma = val->intval / 1000;
+		// Reset to defaults according to USB type on negative values
+		if (val->intval < 0) {
+			if (chip->charger_type == POWER_SUPPLY_TYPE_USB)
+				chip->usb_psy_ma = USB2_MAX_CURRENT_MA;
+			else /* DCP or CDP */
+				chip->usb_psy_ma = DCP_MAX_CURRENT_MA;
+		} else {
+			chip->usb_psy_ma = val->intval / 1000;
+		}
 		smb358_enable_volatile_writes(chip);
 		smb358_set_usb_chg_current(chip, chip->usb_psy_ma);
 		break;

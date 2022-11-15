@@ -1129,6 +1129,7 @@ static int bq2560x_usb_set_property(struct power_supply *psy,
 {
 	struct bq2560x *bq = power_supply_get_drvdata(psy);
 	int ret;
+	union power_supply_propval prop = {0,};
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_ONLINE:
@@ -1153,7 +1154,22 @@ static int bq2560x_usb_set_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_SDP_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
-		bq->usb_psy_ma = val->intval / 1000;
+		// Reset to defaults according to USB type on negative values
+		if (val->intval < 0) {
+			ret = power_supply_get_property(bq->usb_psy,
+						POWER_SUPPLY_PROP_TYPE, &prop);
+
+			if (ret < 0) {
+				pr_err("couldn't read USB TYPE property, ret=%d\n", ret);
+				return 0;
+			}
+			if (prop.intval == POWER_SUPPLY_TYPE_USB)
+				bq->usb_psy_ma = 500;
+			else /* DCP or CDP */
+				bq->usb_psy_ma = 1000;
+		} else {
+			bq->usb_psy_ma = val->intval / 1000;
+		}
 		ret = bq2560x_set_input_current_limit(bq, bq->usb_psy_ma);
 		if (ret < 0)
 			pr_err("couldn't set input current limit, ret=%d\n", ret);
