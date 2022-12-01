@@ -43,6 +43,7 @@ int gtp_rst_gpio;
 int gtp_int_gpio;
 u8 config[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
 				= {GTP_REG_CONFIG_DATA >> 8, GTP_REG_CONFIG_DATA & 0xff};
+#if CONFIG_GTP_GLOVE_MODE
 u8 glove0_config1[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
 				= {GTP_REG_CONFIG_DATA >> 8, GTP_REG_CONFIG_DATA & 0xff};
 u8 glove0_config2[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
@@ -51,6 +52,7 @@ u8 glove1_config1[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
 				= {GTP_REG_CONFIG_DATA >> 8, GTP_REG_CONFIG_DATA & 0xff};
 u8 glove1_config2[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
 				= {GTP_REG_CONFIG_DATA >> 8, GTP_REG_CONFIG_DATA & 0xff};
+#endif
 
 static char tp_lockdown_info[128];
 static char tp_fw_version[10];
@@ -87,7 +89,9 @@ static ssize_t gt91xx_config_write_proc(struct file *, const char __user *, size
 
 static int gtp_lockdown_proc_open (struct inode *inode, struct file *file);
 static int gtp_lockdown_proc_show(struct seq_file *file, void *data);
+#if CONFIG_GTP_GLOVE_MODE
 static ssize_t gtp_glove_write_proc(struct file *filp, const char __user *buffer, size_t count, loff_t *off);
+#endif
 
 static int gtp_power_switch(struct i2c_client *client, int on);
 s32 gtp_i2c_write_no_rst(struct i2c_client *client, u8 *buf, s32 len);
@@ -98,7 +102,9 @@ s32 gtp_i2c_write_no_rst(struct i2c_client *client, u8 *buf, s32 len);
 static struct proc_dir_entry *gt91xx_config_proc;
 #endif
 static struct proc_dir_entry *gt91xx_lockdown_proc;
+#if CONFIG_GTP_GLOVE_MODE
 static struct proc_dir_entry *gt91xx_glove_proc;
+#endif
 
 #if GTP_DRIVER_SEND_CFG
 static const struct file_operations config_proc_ops = {
@@ -115,6 +121,7 @@ static const struct file_operations lockdown_proc_ops = {
 	.read = seq_read,
 };
 
+#if CONFIG_GTP_GLOVE_MODE
 static const struct file_operations glove_proc_ops = {
 	.owner = THIS_MODULE,
 	.write = gtp_glove_write_proc,
@@ -125,6 +132,7 @@ static const struct file_operations glove_proc_ops = {
 
 const u8 cfg_grp0_glove[] = GTP_CFG_GROUP0_GLOVE1;
 const u8 cfg_grp0_glove2[] = GTP_CFG_GROUP0_GLOVE2;
+#endif
 
 
 static int gtp_register_powermanger(struct goodix_ts_data *ts);
@@ -387,7 +395,7 @@ s32 gtp_send_cfg(struct i2c_client *client)
 
 	for (retry = 0; retry < 5; retry++) {
 		GTP_INFO("before send ,gtp_glove_mode : %d",gtp_glove_mode_status);
-		#if CONFIG_GTP_GLOVE_MODE
+#if CONFIG_GTP_GLOVE_MODE
 		switch(gtp_glove_mode_status) {
 		case 1:
 			if (gt9xx_id == 0) {
@@ -433,16 +441,16 @@ s32 gtp_send_cfg(struct i2c_client *client)
 					GTP_INFO("send normal config success");
 				break;
 		}
-		#endif
-		#if (!CONFIG_GTP_GLOVE_MODE)
+#else
 			ret = gtp_i2c_write(client, config , GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
 			if (ret < 0)
 				GTP_DEBUG("gtp write config error.");
-			GTP_DEBUG("gtp write config success");
-		#endif
+			else
+				GTP_DEBUG("gtp write config success");
+#endif
 		GTP_DEBUG("after send ");
-	if(ret > 0)
-		break;
+		if(ret > 0)
+			break;
 	}
 #endif
 	return ret;
@@ -1630,6 +1638,7 @@ static ssize_t gt91xx_config_read_proc(struct file *file, char __user *page, siz
 
 
 
+#if CONFIG_GTP_GLOVE_MODE
 static ssize_t gtp_glove_write_proc(struct file *filp, const char __user *buffer, size_t count, loff_t *off)
 {
 	char ret = 0;
@@ -1659,6 +1668,7 @@ static ssize_t gtp_glove_write_proc(struct file *filp, const char __user *buffer
 	return count;
 
 }
+#endif
 
 #if GTP_DRIVER_SEND_CFG
 static ssize_t gt91xx_config_write_proc(struct file *filp, const char __user *buffer, size_t count, loff_t *off)
@@ -2736,12 +2746,14 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
 		GTP_INFO("create proc entry %s success", GT91XX_Color_PROC_FILE);
 	}
 
+#if CONFIG_GTP_GLOVE_MODE
 	gt91xx_glove_proc = proc_create(GT91XX_Glove_PROC_FILE, 0666, NULL, &glove_proc_ops);
 	if (gt91xx_glove_proc == NULL) {
 	GTP_ERROR("create_glove_proc %s failed\n", GT91XX_Glove_PROC_FILE);
 	} else {
 		GTP_INFO("create_glove_proc %s success", GT91XX_Glove_PROC_FILE);
 	}
+#endif
 
 
 #if GTP_ESD_PROTECT
