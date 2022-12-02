@@ -18,7 +18,7 @@
 #include "pocket-judge.h"
 
 #include "touchscreen/FT5346/ft5346.h"
-#include "touchscreen/gt9xx_v2.8/gt9xx.h"
+#include "touchscreen/gt9xx_v2.4/gt9xx.h"
 
 /**
  * This driver maintains a sysfs interface used by the pocket bridge system
