@@ -186,6 +186,11 @@
 bool thermal = false;
 int rolex_smb358 = 1;
 
+#ifdef CONFIG_TOUCHSCREEN_GT9XX_v24
+extern bool gt9xx_ts_probed;
+extern void gtp_usb_plugin(bool mode);
+#endif
+
 extern struct device_node *of_batterydata_get_best_profile(
 		const struct device_node *batterydata_container_node,
 		const char *psy_name,  const char  *batt_type);
@@ -1457,6 +1462,11 @@ static int apsd_complete(struct smb358_charger *chip, u8 status)
 	u8 reg = 0;
 	enum power_supply_type type = POWER_SUPPLY_TYPE_UNKNOWN;
 	u32 id = EXTCON_NONE;
+
+#ifdef CONFIG_TOUCHSCREEN_GT9XX_v24
+		if (gt9xx_ts_probed)
+			gtp_usb_plugin(status);
+#endif
 
 	/*
 	 * If apsd is disabled, charger detection is done by

@@ -43,6 +43,11 @@
 extern int xiaomi_series_read(void);
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_GT9XX_v24
+extern bool gt9xx_ts_probed;
+extern void gtp_usb_plugin(bool mode);
+#endif
+
 #include "bq2560x_reg.h"
 #include "bq2560x.h"
 
@@ -2361,6 +2366,11 @@ static irqreturn_t bq2560x_charger_interrupt(int irq, void *dev_id)
 	mutex_unlock(&bq->irq_complete);
 
 	power_supply_changed(bq->batt_psy);
+
+#ifdef CONFIG_TOUCHSCREEN_GT9XX_v24
+		if (gt9xx_ts_probed)
+			gtp_usb_plugin(bq->usb_present);
+#endif
 
 	return IRQ_HANDLED;
 }
