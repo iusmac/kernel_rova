@@ -64,6 +64,8 @@ int gt9xx_flag;
 
 static bool disable_keys_feature = false;
 
+static struct goodix_ts_data *ts_data_g = NULL;
+
 static ssize_t gtp_ts_disable_keys_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -2663,6 +2665,8 @@ void gtp_usb_plugin(bool mode)
 extern bool xiaomi_ts_probed;
 #endif
 
+extern bool gt9xx_ts_probed;
+
 /*******************************************************
 Function:
 	I2c probe.
@@ -2874,6 +2878,9 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
 #ifdef CONFIG_MACH_XIAOMI
 	xiaomi_ts_probed = true;
 #endif
+
+	gt9xx_ts_probed = true;
+	ts_data_g = ts;
 
 if (gtp_read_FW(client) < 0)
 	printk("read FW fail\n");
@@ -3370,6 +3377,21 @@ static void gtp_esd_check_func(struct work_struct *work)
 	return;
 }
 #endif
+
+#ifdef CONFIG_POCKET_JUDGE
+void gtp_ts_inpocket_set(bool active)
+{
+	struct goodix_ts_data *ts = ts_data_g;
+
+	if (!ts || !ts->client->irq)
+		return;
+
+	if (active)
+		gtp_irq_disable(ts);
+	else
+		gtp_irq_enable(ts);
+}
+#endif /* CONFIG_POCKET_JUDGE */
 
 #if 1
 static const struct of_device_id goodix_match_table[] = {

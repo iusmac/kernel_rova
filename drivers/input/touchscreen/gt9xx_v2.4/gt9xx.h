@@ -400,4 +400,8 @@ extern int gtp_int_gpio;
 int gtp_parse_dt_cfg(struct device *dev, u8 *cfg, int *cfg_len, u8 sid);
 #endif
 #define CFG_LOC_DRVA_NUM                29
+
+#ifdef CONFIG_POCKET_JUDGE
+void gtp_ts_inpocket_set(bool active);
+#endif
 #endif /* _GOODIX_GT9XX_H_ */
