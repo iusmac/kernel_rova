@@ -52,7 +52,7 @@ char g_lcd_id[128];
 
 bool display_on = true;
 
-bool is_display_on()
+bool is_display_on(void)
 {
 	return display_on;
 }
