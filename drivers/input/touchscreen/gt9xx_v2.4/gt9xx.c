@@ -3382,14 +3382,19 @@ static void gtp_esd_check_func(struct work_struct *work)
 void gtp_ts_inpocket_set(bool active)
 {
 	struct goodix_ts_data *ts = ts_data_g;
+	unsigned long irqflags;
 
 	if (!ts || !ts->client->irq)
 		return;
 
+	spin_lock_irqsave(&ts->irq_lock, irqflags);
+
 	if (active)
-		gtp_irq_disable(ts);
+		disable_irq(ts->client->irq);
 	else
-		gtp_irq_enable(ts);
+		enable_irq(ts->client->irq);
+
+	spin_unlock_irqrestore(&ts->irq_lock, irqflags);
 }
 #endif /* CONFIG_POCKET_JUDGE */
 
