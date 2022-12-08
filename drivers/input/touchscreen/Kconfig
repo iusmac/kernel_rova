@@ -1451,6 +1451,10 @@ config TOUCHSCREEN_GT9XX_v24
 
 source "drivers/input/touchscreen/gt9xx_v2.4/Kconfig"
 
+config TOUCHSCREEN_DISABLE_KEYS_FEATURE
+	bool "Disable keys feature"
+	depends on TOUCHSCREEN_GT9XX_v24 || TOUCHSCREEN_FT5346
+
 config TOUCHSCREEN_HIMAX_CHIPSET
 	bool "Himax touchpanel CHIPSET"
 	depends on I2C

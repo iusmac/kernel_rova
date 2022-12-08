@@ -255,6 +255,7 @@ static int focal_i2c_Write(unsigned char *writebuf, int writelen)
 }
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 static ssize_t ft5x06_ts_disable_keys_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -277,6 +278,7 @@ static ssize_t ft5x06_ts_disable_keys_store(struct device *dev,
 		return -EINVAL;
 	}
 }
+#endif
 
 static int ft5x06_i2c_read(struct i2c_client *client, char *writebuf,
 						int writelen, char *readbuf, int readlen)
@@ -543,9 +545,11 @@ static irqreturn_t ft5x06_ts_interrupt(int irq, void *dev_id)
 
 		input_mt_slot(ip_dev, id);
 
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 		if (data->disable_keys && y > data->pdata->panel_maxy) {
 			break;
 		}
+#endif
 
 		if (status == FT_TOUCH_DOWN || status == FT_TOUCH_CONTACT) {
 			input_mt_report_slot_state(ip_dev, MT_TOOL_FINGER, 1);
@@ -2845,6 +2849,7 @@ extern bool xiaomi_ts_probed;
 
 extern bool ft5346_ts_probed;
 
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 static DEVICE_ATTR(disable_keys, S_IWUSR | S_IRUSR, ft5x06_ts_disable_keys_show,
 			ft5x06_ts_disable_keys_store);
 
@@ -2898,6 +2903,7 @@ exit:
 	kfree(key_disabler_sysfs_node);
 	return ret;
 }
+#endif
 
 static int ft5x06_ts_probe(struct i2c_client *client,
 						const struct i2c_device_id *id)
@@ -3281,6 +3287,7 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 		CTP_DEBUG("tp battery supply not found\n");
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 	err = sysfs_create_group(&client->dev.kobj, &ft5x06_ts_attr_group);
 	if (err) {
 		dev_err(&client->dev, "Failure %d creating sysfs group\n", err);
@@ -3288,6 +3295,8 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 	}
 
 	ft5x06_proc_init(client->dev.kobj.sd);
+#endif
+
 	enable_irq(data->client->irq);
 
 #ifdef CONFIG_MACH_XIAOMI
@@ -3363,7 +3372,9 @@ static int ft5x06_ts_remove(struct i2c_client *client)
 		if (retval < 0)
 			CTP_ERROR("Cannot get idle pinctrl state\n");
 	}
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 	sysfs_remove_group(&client->dev.kobj, &ft5x06_ts_attr_group);
+#endif
 
 	input_unregister_device(data->input_dev);
 

@@ -62,10 +62,13 @@ static char tp_info_summary[80] = "";
 int gt9xx_id;
 int gt9xx_flag;
 
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 static bool disable_keys_feature = false;
+#endif
 
 static struct goodix_ts_data *ts_data_g = NULL;
 
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 static ssize_t gtp_ts_disable_keys_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -140,6 +143,7 @@ exit:
 	kfree(key_disabler_sysfs_node);
 	return ret;
 }
+#endif
 
 #if GTP_HAVE_TOUCH_KEY
 	static const u16 touch_key_array[] = GTP_KEY_TAB;
@@ -970,7 +974,11 @@ static void goodix_ts_work_func(struct work_struct *work)
 	#endif
 
 	#if GTP_HAVE_TOUCH_KEY
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 		if (!disable_keys_feature && !pre_touch) {
+#else
+		if (!pre_touch) {
+#endif
 			for (i = 0; i < GTP_MAX_KEY_NUM; i++) {
 			#if GTP_DEBUG_ON
 				for (ret = 0; ret < 4; ++ret) {
@@ -2868,12 +2876,14 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
 	/* register suspend and resume fucntion*/
 	gtp_register_powermanger(ts);
 
+#ifdef CONFIG_TOUCHSCREEN_DISABLE_KEYS_FEATURE
 	ret = sysfs_create_group(&client->dev.kobj, &gtp_ts_attr_group);
 	if (ret) {
 		dev_err(&client->dev, "Failure %d creating sysfs group\n", ret);
 		sysfs_remove_group(&client->dev.kobj, &gtp_ts_attr_group);
 	}
 	gtp_proc_init(client->dev.kobj.sd);
+#endif
 
 #ifdef CONFIG_MACH_XIAOMI
 	xiaomi_ts_probed = true;
