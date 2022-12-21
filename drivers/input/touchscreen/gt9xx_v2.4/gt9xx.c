@@ -1503,6 +1503,11 @@ static s32 gtp_init_panel(struct goodix_ts_data *ts)
 	}
 	GTP_INFO("Sensor_ID: %d", sensor_id);
 	if (sensor_id == 0) {
+#ifdef CONFIG_MACH_XIAOMI_ROVA
+		GTP_ERROR("Detected rova device with Sensor_ID = 0. No Config Shall Be Sent!");
+		ts->pnl_init_error = 1;
+		return -EPERM;
+#endif
 	}
 
 	/* parse config data*/
