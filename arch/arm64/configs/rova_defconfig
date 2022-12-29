@@ -854,3 +854,6 @@ CONFIG_POCKET_JUDGE=y
 
 # Power management options
 CONFIG_SUSPEND_SKIP_SYNC=y
+
+# FAIR Scheuler tunables
+CONFIG_PELT_UTIL_HALFLIFE_16=y
