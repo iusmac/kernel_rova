@@ -104,7 +104,7 @@ static inline void wpalDump( wpt_moduleid module, wpt_tracelevel level,
 static inline void wpalTraceSetLevel( wpt_moduleid module,
                          wpt_tracelevel level, wpt_boolean on ) {};
 static inline void wpalTraceDisplay(void) {};
-#define WPAL_ASSERT(x) do {} while (0);
+#define WPAL_ASSERT(x) ((void)0);
 
 #endif //WLAN_DEBUG
 

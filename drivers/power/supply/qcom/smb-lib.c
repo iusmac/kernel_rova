@@ -25,6 +25,7 @@
 #include "step-chg-jeita.h"
 #include "storm-watch.h"
 
+#ifdef DEBUG
 #define smblib_err(chg, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chg->name,	\
 		__func__, ##__VA_ARGS__)	\
@@ -38,6 +39,10 @@
 			pr_debug("%s: %s: " fmt, chg->name,	\
 				__func__, ##__VA_ARGS__);	\
 	} while (0)
+#else
+#define smblib_err(chg, fmt, ...) ((void)0)
+#define smblib_dbg(chg, reason, fmt, ...) ((void)0)
+#endif
 
 static bool is_secure(struct smb_charger *chg, int addr)
 {

@@ -109,6 +109,7 @@ enum {
 static int debug_mask;
 module_param_named(debug_mask, debug_mask, int, 0600);
 
+#ifdef DEBUG
 #define pl_dbg(chip, reason, fmt, ...)				\
 	do {								\
 		if (debug_mask & (reason))				\
@@ -116,6 +117,9 @@ module_param_named(debug_mask, debug_mask, int, 0600);
 		else							\
 			pr_debug(fmt, ##__VA_ARGS__);		\
 	} while (0)
+#else
+#define pl_dbg(chip, reason, fmt, ...) ((void)0)
+#endif
 
 #define IS_USBIN(mode)	((mode == POWER_SUPPLY_PL_USBIN_USBIN) \
 			|| (mode == POWER_SUPPLY_PL_USBIN_USBIN_EXT))
