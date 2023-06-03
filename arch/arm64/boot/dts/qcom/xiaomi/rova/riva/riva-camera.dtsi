@@ -104,6 +104,7 @@
 		compatible = "qcom,eeprom";
 		qcom,slave-addr = <0x5a>;
 		qcom,cci-master = <0>;
+		qcom,i2c-freq-mode = <0x1>;
 
 		qcom,num-blocks = <5>;
 		qcom,page0 = <1 0x0A00 2 0x04 1 1>;
@@ -180,6 +181,7 @@
 		qcom,slave-addr = <0xa0>;
 		qcom,cci-master = <0>;
 		qcom,num-blocks = <1>;
+		qcom,i2c-freq-mode = <0x1>;
 
 		qcom,page0 = <0 0x0 2 0x01 1 1>;
 		qcom,poll0 = <0 0x0 2 0 1 1>;
@@ -243,6 +245,7 @@
 		qcom,slave-addr = <0xa0>;
 		qcom,cci-master = <0>;
 		qcom,num-blocks = <1>;
+		qcom,i2c-freq-mode = <0x1>;
 
 		qcom,page0 = <0 0x0 2 0x01 1 1>;
 		qcom,poll0 = <0 0x0 2 0 1 1>;

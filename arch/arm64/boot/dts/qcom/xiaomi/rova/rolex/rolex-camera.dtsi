@@ -59,6 +59,7 @@
 		qcom,slave-addr = <0x20>;
 		qcom,cci-master = <0>;
 		qcom,num-blocks = <1>;
+		qcom,i2c-freq-mode = <0x1>;
 		qcom,page0 = <0 0x3d85 2 0x16 1 0>;
 		qcom,poll0 =   <0 0x3d85 2 0x16 1 0>;
 		qcom,mem0 = <410 0x7220 2 0 1 1>;
@@ -109,6 +110,7 @@
 		compatible = "qcom,eeprom";
 		qcom,slave-addr = <0x20>;
 		qcom,cci-master = <0>;
+		qcom,i2c-freq-mode = <0x1>;
 
 		qcom,num-blocks = <5>;
 		qcom,page0 = <1 0x0A00 2 0x04 1 1>;
@@ -185,6 +187,7 @@
 		qcom,slave-addr = <0xA0>;
 		qcom,cci-master = <0>;
 		qcom,num-blocks = <1>;
+		qcom,i2c-freq-mode = <0x1>;
 		qcom,page0 = <0 0x0 2 0x01 1 1>;
 		qcom,poll0 = <0 0x0 2 0 1 1>;
 		qcom,mem0 = <0x834 0x0 2 0 1 0>;
@@ -235,6 +238,7 @@
 		compatible = "qcom,eeprom";
 		qcom,slave-addr = <0x6c>;
 		qcom,cci-master = <0>;
+		qcom,i2c-freq-mode = <0x1>;
 
 		qcom,num-blocks = <4>;
 		qcom,page0 = <1 0x3d88 2 7010 2 1>;
@@ -308,6 +312,7 @@
 		compatible = "qcom,eeprom";
 		qcom,slave-addr = <0x30>;
 		qcom,cci-master = <0>;
+		qcom,i2c-freq-mode = <0x1>;
 
 		qcom,num-blocks = <5>;
 		qcom,page0 = <1 0x0A00 2 0x04 1 1>;
