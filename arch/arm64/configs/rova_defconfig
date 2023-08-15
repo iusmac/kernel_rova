@@ -855,3 +855,7 @@ CONFIG_PELT_UTIL_HALFLIFE_16=y
 
 # Default contiguous memory area size
 CONFIG_CMA_SIZE_MBYTES=20
+
+# Reduce size
+CONFIG_IKHEADERS=n
+CONFIG_SLUB_DEBUG=n
