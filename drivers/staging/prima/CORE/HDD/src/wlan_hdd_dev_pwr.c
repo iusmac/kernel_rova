@@ -519,7 +519,7 @@ int hddDevResumeHdlr(struct device *dev)
 
 static const struct dev_pm_ops pm_ops = {
    .suspend = hddDevSuspendHdlr,
-   .resume = hddDevResumeHdlr,
+   .resume = hddDevResumeHdlr
 };
 
 /*----------------------------------------------------------------------------
