@@ -38,7 +38,9 @@
 #include <soc/qcom/pm.h>
 #include <soc/qcom/event_timer.h>
 #include <soc/qcom/lpm_levels.h>
+#ifdef CONFIG_MSM_IDLE_STATS
 #include <soc/qcom/lpm-stats.h>
+#endif
 #include <asm/arch_timer.h>
 #include <asm/suspend.h>
 #include <asm/cpuidle.h>
@@ -485,7 +487,9 @@ static int cluster_configure(struct lpm_cluster *cluster, int idx,
 		trace_cluster_enter(cluster->cluster_name, idx,
 			cluster->num_children_in_sync.bits[0],
 			cluster->child_cpus.bits[0], from_idle);
+#ifdef CONFIG_MSM_IDLE_STATS
 		lpm_stats_cluster_enter(cluster->stats, idx);
+#endif
 
 	}
 
@@ -561,7 +565,9 @@ static void cluster_prepare(struct lpm_cluster *cluster,
 	if (cluster_configure(cluster, i, from_idle))
 		goto failed;
 
+#ifdef CONFIG_MSM_IDLE_STATS
 	cluster->stats->sleep_time = start_time;
+#endif
 	cluster_prepare(cluster->parent, &cluster->num_children_in_sync, i,
 			from_idle, start_time);
 
@@ -569,7 +575,9 @@ static void cluster_prepare(struct lpm_cluster *cluster,
 	return;
 failed:
 	spin_unlock(&cluster->sync_lock);
+#ifdef CONFIG_MSM_IDLE_STATS
 	cluster->stats->sleep_time = 0;
+#endif
 }
 
 static void cluster_unprepare(struct lpm_cluster *cluster,
@@ -604,10 +612,12 @@ static void cluster_unprepare(struct lpm_cluster *cluster,
 	if (!first_cpu || cluster->last_level == cluster->default_level)
 		goto unlock_return;
 
+#ifdef CONFIG_MSM_IDLE_STATS
 	if (cluster->stats->sleep_time)
 		cluster->stats->sleep_time = end_time -
 			cluster->stats->sleep_time;
 	lpm_stats_cluster_exit(cluster->stats, cluster->last_level, success);
+#endif
 
 	level = &cluster->levels[cluster->last_level];
 
@@ -773,7 +783,9 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 	cluster_prepare(cpu->parent, cpumask, idx, true, start_time);
 
 	trace_cpu_idle_enter(idx);
+#ifdef CONFIG_MSM_IDLE_STATS
 	lpm_stats_cpu_enter(idx, start_time);
+#endif
 
 	if (need_resched())
 		goto exit;
@@ -782,7 +794,9 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 
 exit:
 	end_time = ktime_to_ns(ktime_get());
+#ifdef CONFIG_MSM_IDLE_STATS
 	lpm_stats_cpu_exit(idx, end_time, success);
+#endif
 
 	cluster_unprepare(cpu->parent, cpumask, idx, true, end_time, success);
 	cpu_unprepare(cpu, idx, true);
@@ -951,6 +965,7 @@ static int __init init_lpm(void)
 
 postcore_initcall(init_lpm);
 
+#ifdef CONFIG_MSM_IDLE_STATS
 static void register_cpu_lpm_stats(struct lpm_cpu *cpu,
 		struct lpm_cluster *parent)
 {
@@ -970,7 +985,9 @@ static void register_cpu_lpm_stats(struct lpm_cpu *cpu,
 
 	kfree(level_name);
 }
+#endif
 
+#ifdef CONFIG_MSM_IDLE_STATS
 static void register_cluster_lpm_stats(struct lpm_cluster *cl,
 		struct lpm_cluster *parent)
 {
@@ -1005,11 +1022,14 @@ static void register_cluster_lpm_stats(struct lpm_cluster *cl,
 	list_for_each_entry(child, &cl->child, list)
 		register_cluster_lpm_stats(child, cl);
 }
+#endif
 
 static int lpm_suspend_prepare(void)
 {
 	suspend_in_progress = true;
+#ifdef CONFIG_MSM_IDLE_STATS
 	lpm_stats_suspend_enter();
+#endif
 
 	return 0;
 }
@@ -1017,7 +1037,9 @@ static int lpm_suspend_prepare(void)
 static void lpm_suspend_wake(void)
 {
 	suspend_in_progress = false;
+#ifdef CONFIG_MSM_IDLE_STATS
 	lpm_stats_suspend_exit();
+#endif
 }
 
 static int lpm_suspend_enter(suspend_state_t state)
@@ -1086,7 +1108,9 @@ static int lpm_probe(struct platform_device *pdev)
 	freeze_set_ops(&lpm_freeze_ops);
 	hrtimer_init(&lpm_hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 
+#ifdef CONFIG_MSM_IDLE_STATS
 	register_cluster_lpm_stats(lpm_root_node, NULL);
+#endif
 
 	ret = cluster_cpuidle_register(lpm_root_node);
 	put_online_cpus();
