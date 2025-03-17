@@ -5,7 +5,7 @@
     <string name="issue_report_body_2">Hemen bildirin!</string>
     <string name="issue_report_github">GitHub\'da Bildir</string>
     <string name="issue_report_telegram">Telegram\'dan İletişime Geçin</string>
-    <string name="issue_report_github_link">https://github.com/rifsxd/KernelSU-Next/issues</string>
+    <string name="issue_report_github_link">https://github.com/KernelSU-Next/KernelSU-Next/issues</string>
     <string name="issue_report_telegram_link">https://t.me/ksunext</string>
     <string name="confirm">Onayla</string>
     <string name="app_name" translatable="false">KernelSU Next</string>
@@ -69,7 +69,7 @@
     <string name="home_magic_mount">Magic Mount</string>
     <string name="home_overlayfs_mount">OverlayFS</string>
     <string name="unavailable">Kullanılamaz</string>
-    <string name="use_overlay_fs">OverlayFS Kullan (Beta)</string>
+    <string name="use_overlay_fs">OverlayFS Kullan</string>
     <string name="use_overlay_fs_summary">KernelSU Next\'in Mount sistemi için OverlayFS ile Magic Mount arasında geçiş yapın.</string>
     <string name="reboot_required">Yeniden Başlatma Gerekiyor</string>
     <string name="reboot_message">Değişiklikler sistem yeniden başlatıldıktan sonra etkili olacaktır. Şimdi yeniden başlatmak istiyor musunuz?</string>
@@ -83,7 +83,7 @@
     <string name="cancel">İptal</string>
     <string name="later">Sonra</string>
     <string name="home_next_kernelsu">🔥 Yeni Sürüm</string>
-    <string name="home_next_kernelsu_repo">https://github.com/rifsxd/KernelSU-Next</string>
+    <string name="home_next_kernelsu_repo">https://github.com/KernelSU-Next/KernelSU-Next</string>
     <string name="home_next_kernelsu_body">Son deneysel dal. GitHub\'da kontrol edin!</string>
     <string name="home_experimental_kernelsu">⚠️ Deneysel Geliştirme Uyarısı!</string>
     <string name="home_experimental_kernelsu_repo">127.0.0.1</string>
