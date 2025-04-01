@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -19419,6 +19419,13 @@ void WDA_BaCheckActivity(tWDA_CbContext *pWDA)
             "Unable to get WNI_CFG_ENABLE_TX_RX_AGGREGATION");
       val1 = 1;
    }
+
+   if (limIsSystemInScanState(pMac)) {
+       VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_DEBUG,
+                 "Scan in progress, defer the ADDBA request");
+       goto restart_timer;
+   }
+
    /* walk through all STA entries and find out TX packet count */ 
    for(curSta = 0 ; curSta < pWDA->wdaMaxSta ; curSta++)
    {
@@ -19542,6 +19549,9 @@ void WDA_BaCheckActivity(tWDA_CbContext *pWDA)
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO_LOW,
                               "There is no TID for initiating BA");
    }
+
+restart_timer:
+
    if( VOS_STATUS_SUCCESS != 
          WDA_STOP_TIMER(&pWDA->wdaTimers.baActivityChkTmr))
    {

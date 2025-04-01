@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -8142,7 +8142,6 @@ eHalStatus csrScanForSSID(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamProfi
     tANI_U32 numSsid = pProfile->SSIDs.numOfSSIDs;
     struct csr_scan_for_ssid_context *context;
 
-    smsLog(pMac, LOG2, FL("called"));
     //For WDS, we use the index 0. There must be at least one in there
     if( CSR_IS_WDS_STA( pProfile ) && numSsid )
     {
@@ -8234,15 +8233,9 @@ eHalStatus csrScanForSSID(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamProfi
                                    pMac->roam.configParam.max_chntime_btc_esco;
             pScanCmd->u.scanCmd.u.scanRequest.min_chntime_btc_esco =
                                    pMac->roam.configParam.min_chntime_btc_esco;
-            if(pProfile->BSSIDs.numOfBSSIDs == 1)
-            {
-                vos_mem_copy(pScanCmd->u.scanCmd.u.scanRequest.bssid,
-                             pProfile->BSSIDs.bssid, sizeof(tCsrBssid));
-            }
-            else
-            {
-                vos_mem_copy(pScanCmd->u.scanCmd.u.scanRequest.bssid, bAddr, 6);
-            }
+
+            vos_mem_copy(pScanCmd->u.scanCmd.u.scanRequest.bssid, bAddr, 6);
+
             if(pProfile->ChannelInfo.numOfChannels)
             {
                 pScanCmd->u.scanCmd.u.scanRequest.ChannelInfo.ChannelList = vos_mem_malloc(

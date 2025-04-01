@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -504,6 +505,7 @@ void limContinuePostChannelScan(tpAniSirGlobal pMac)
     tANI_U8 channelNum;
     tANI_U8 i = 0;
     tSirRetStatus status = eSIR_SUCCESS;
+    tANI_U32 cfgVal;
 
     if( pMac->lim.abortScan || (NULL == pMac->lim.gpLimMlmScanReq ) ||
         (pMac->lim.gLimCurrentScanChannelId >
@@ -520,12 +522,22 @@ void limContinuePostChannelScan(tpAniSirGlobal pMac)
         return;
     }
 
+    wlan_cfgGetInt(pMac, WNI_CFG_ACTIVE_PASSIVE_CON, &cfgVal);
+
     channelNum = limGetCurrentScanChannel(pMac);
 
     if (channelNum == limGetCurrentOperatingChannel(pMac) &&
            limIsconnectedOnDFSChannel(channelNum))
     {
         limCovertChannelScanType(pMac, channelNum, true);
+        if (cfgVal) {
+            pMac->lim.dfschannelList.timeStamp[channelNum] =
+                                       vos_timer_get_system_time();
+            if (!tx_timer_running(&pMac->lim.limTimers.gLimActiveToPassiveChannelTimer))
+            {
+                tx_timer_activate(&pMac->lim.limTimers.gLimActiveToPassiveChannelTimer);
+            }
+         }
     }
 
     if ((pMac->lim.gpLimMlmScanReq->scanType == eSIR_ACTIVE_SCAN) &&
@@ -550,8 +562,9 @@ void limContinuePostChannelScan(tpAniSirGlobal pMac)
                              VOS_MAC_ADDRESS_LEN);
 
             limLog(pMac, LOG1,
-                 FL(" Mac Addr "MAC_ADDRESS_STR " used in sending ProbeReq number %d, for SSID %s on channel: %d"),
-                      MAC_ADDR_ARRAY(gSelfMacAddr) ,i, pMac->lim.gpLimMlmScanReq->ssId[i].ssId, channelNum);
+                 FL(" Mac Addr "MAC_ADDRESS_STR " used in sending ProbeReq number %d, for SSID %s on channel: %d BSSID "MAC_ADDRESS_STR),
+                      MAC_ADDR_ARRAY(gSelfMacAddr) ,i, pMac->lim.gpLimMlmScanReq->ssId[i].ssId, channelNum,
+                      MAC_ADDR_ARRAY(pMac->lim.gpLimMlmScanReq->bssId));
             // include additional IE if there is
             status = limSendProbeReqMgmtFrame( pMac, &pMac->lim.gpLimMlmScanReq->ssId[i],
                pMac->lim.gpLimMlmScanReq->bssId, channelNum, gSelfMacAddr,

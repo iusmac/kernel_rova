@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2017, 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -500,13 +501,6 @@ limHandleFramesInScanState(tpAniSirGlobal pMac, tpSirMsgQ limMsg, tANI_U8 *pRxPa
     else if ((fc.type == SIR_MAC_MGMT_FRAME) && (fc.subType == SIR_MAC_MGMT_PROBE_REQ))
     {
       limProcessProbeReqFrame_multiple_BSS(pMac, pRxPacketInfo, psessionEntry);
-    }
-    else if ((fc.type == SIR_MAC_MGMT_FRAME) && (fc.subType == SIR_MAC_MGMT_ACTION))
-    {
-        if (psessionEntry != NULL)
-            limProcessActionFrame(pMac, pRxPacketInfo, psessionEntry);
-        else
-            limProcessActionFrameNoSession(pMac, pRxPacketInfo);
     }
     else
     {

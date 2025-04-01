@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2017, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2769,7 +2770,9 @@ limDelSta(
 
     wlan_cfgGetInt(pMac, WNI_CFG_ACTIVE_PASSIVE_CON, &cfgValue);
 
-    channelNum = limGetCurrentOperatingChannel(pMac);
+    if (psessionEntry->valid)
+	    channelNum =  psessionEntry->currentOperChannel;
+
     limLog(pMac, LOG1, FL("Current Operating channel is %d"), channelNum);
     if (!cfgValue && (eLIM_STA_ROLE == GET_LIM_SYSTEM_ROLE(psessionEntry)) &&
          limIsconnectedOnDFSChannel(channelNum))
