@@ -65,17 +65,22 @@ bool ksu_execveat_hook __read_mostly = true;
 bool ksu_input_hook __read_mostly = true;
 
 
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+bool ksu_devpts_hook = false;
+bool susfs_is_sus_su_ready = false;
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
+
 u32 ksu_devpts_sid;
 
-void on_post_fs_data(void)
+void ksu_on_post_fs_data(void)
 {
 	static bool done = false;
 	if (done) {
-		pr_info("on_post_fs_data already done\n");
+		pr_info("ksu_on_post_fs_data already done\n");
 		return;
 	}
 	done = true;
-	pr_info("on_post_fs_data!\n");
+	pr_info("ksu_on_post_fs_data!\n");
 	ksu_load_allow_list();
 	// sanity check, this may influence the performance
 	stop_input_hook();
@@ -198,7 +203,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 					first_arg);
 				if (!strcmp(first_arg, "second_stage")) {
 					pr_info("/system/bin/init second_stage executed\n");
-					apply_kernelsu_rules();
+					ksu_apply_kernelsu_rules();
 					init_second_stage_executed = true;
 					ksu_android_ns_fs_check();
 				}
@@ -222,7 +227,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 				pr_info("/init first arg: %s\n", first_arg);
 				if (!strcmp(first_arg, "--second-stage")) {
 					pr_info("/init second_stage executed\n");
-					apply_kernelsu_rules();
+					ksu_apply_kernelsu_rules();
 					init_second_stage_executed = true;
 					ksu_android_ns_fs_check();
 				}
@@ -259,7 +264,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 					    (!strcmp(env_value, "1") ||
 					     !strcmp(env_value, "true"))) {
 						pr_info("/init second_stage executed\n");
-						apply_kernelsu_rules();
+						ksu_apply_kernelsu_rules();
 						init_second_stage_executed =
 							true;
 						ksu_android_ns_fs_check();
@@ -274,7 +279,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 		first_app_process = false;
 		pr_info("exec app_process, /data prepared, second_stage: %d\n",
 			init_second_stage_executed);
-		on_post_fs_data(); // we keep this for old ksud
+		ksu_on_post_fs_data(); // we keep this for old ksud
 		stop_execve_hook();
 	}
 
@@ -469,6 +474,36 @@ bool ksu_is_safe_mode()
 	return false;
 }
 
+/* 
+ * ksu_handle_execve_ksud, execve_ksud handler for non kprobe
+ * adapted from sys_execve_handler_pre 
+ * https://github.com/tiann/KernelSU/commit/2027ac3
+ */
+__maybe_unused int ksu_handle_execve_ksud(const char __user *filename_user,
+			const char __user *const __user *__argv)
+{
+	struct user_arg_ptr argv = { .ptr.native = __argv };
+	struct filename filename_in, *filename_p;
+	char path[32];
+
+	// return early if disabled.
+	if (!ksu_execveat_hook) {
+		return 0;
+	}
+
+	if (!filename_user)
+		return 0;
+
+	memset(path, 0, sizeof(path));
+	ksu_strncpy_from_user_nofault(path, filename_user, 32);
+
+	// this is because ksu_handle_execveat_ksud calls it filename->name
+	filename_in.name = path;
+	filename_p = &filename_in;
+    
+	return ksu_handle_execveat_ksud(AT_FDCWD, &filename_p, &argv, NULL, NULL);
+}
+
 #ifdef CONFIG_KSU_WITH_KPROBES
 
 // https://elixir.bootlin.com/linux/v5.10.158/source/fs/exec.c#L1864
@@ -616,6 +651,10 @@ static void stop_execve_hook()
 #else
 	ksu_execveat_hook = false;
 	pr_info("stop execve_hook\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+	susfs_is_sus_su_ready = true;
+	pr_info("susfs: sus_su is ready\n");
 #endif
 }
 
