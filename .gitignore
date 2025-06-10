@@ -1,5 +1,5 @@
 .idea
 .vscode
-*.patch
-*.rej
-*.orig
+manager/
+userspace/
+test/
