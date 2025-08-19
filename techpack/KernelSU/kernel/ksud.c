@@ -491,7 +491,7 @@ __maybe_unused int ksu_handle_execve_ksud(const char __user *filename_user,
 	struct filename filename_in, *filename_p;
 	char path[32];
 
-#ifndef CONFIG_KSU_KPROBES_HOOK
+#if !defined(CONFIG_KSU_KPROBES_HOOK) || defined(CONFIG_KSU_STATIC_HOOKS)
 	// return early if disabled.
 	if (!ksu_execveat_hook) {
 		return 0;
