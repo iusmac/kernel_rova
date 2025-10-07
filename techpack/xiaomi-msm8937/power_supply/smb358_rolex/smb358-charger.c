@@ -1265,9 +1265,9 @@ static int get_prop_current_now(struct smb358_charger *chip)
 			switch (ret.intval) {
 				case POWER_SUPPLY_TYPE_USB_CDP:
 				case POWER_SUPPLY_TYPE_USB_DCP:
-					return -500000; // Fast charging
+					return 0; // Fast charging
 				case POWER_SUPPLY_TYPE_USB:
-					return 30000; // Slow charging
+					return 0; // Slow charging
 				default:
 					return 500000; // Discharging
 			}
