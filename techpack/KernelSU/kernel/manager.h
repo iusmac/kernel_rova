@@ -13,7 +13,7 @@ static inline bool ksu_is_manager_uid_valid()
 	return ksu_manager_uid != KSU_INVALID_UID;
 }
 
-static inline bool ksu_is_manager()
+static inline bool is_manager()
 {
 	return unlikely(ksu_manager_uid == current_uid().val);
 }
@@ -33,4 +33,5 @@ static inline void ksu_invalidate_manager_uid()
 	ksu_manager_uid = KSU_INVALID_UID;
 }
 
+int ksu_observer_init(void);
 #endif
