@@ -33,21 +33,11 @@ $(info -- KDIR: $(KDIR))
 $(info -- MDIR: $(MDIR))
 
 # Check if this is a git repository
-# For in-tree build: check $(srctree)/$(src)/../.git
-# For out-of-tree build: check $(MDIR)/../.git
-ifeq ($(shell test -e $(srctree)/$(src)/../.git && echo "in-tree"),in-tree)
-# In-tree build (git submodule)
-$(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
-KSU_GIT_VERSION := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
-KSU_GIT_TAG := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git describe --tags --abbrev=0 2>/dev/null)
+# KSU_GIT_VERSION := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
+# KSU_GIT_TAG := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git describe --tags --abbrev=0 2>/dev/null)
 KSU_GIT_VERSION_VALID := 1
-else ifeq ($(shell test -e $(MDIR)/../.git && echo "out-of-tree"),out-of-tree)
-# Out-of-tree build (standalone repository)
-$(shell cd $(MDIR); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
-KSU_GIT_VERSION := $(shell cd $(MDIR); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
-KSU_GIT_TAG := $(shell cd $(MDIR); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git describe --tags --abbrev=0 2>/dev/null)
-KSU_GIT_VERSION_VALID := 1
-endif
+KSU_GIT_VERSION := 2858
+KSU_GIT_TAG := "v3.0.0"
 
 # Calculate version if git version is available
 ifdef KSU_GIT_VERSION_VALID
