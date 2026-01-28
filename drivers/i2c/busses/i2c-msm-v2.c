@@ -2490,9 +2490,6 @@ static int i2c_msm_rsrcs_process_dt(struct i2c_msm_ctrl *ctrl,
 
 	struct i2c_msm_dt_to_pdata_map map[] = {
 	{"i2c",				&pdev->id,	DT_REQ,  DT_ID,  -1},
-	{"qcom,auto-resume-from-sys-suspend",
-					&(ctrl->rsrcs.auto_resume_from_sys_suspend),
-							DT_OPT,  DT_BOOL, 0},
 	{"qcom,clk-freq-out",		&ctrl->rsrcs.clk_freq_out,
 							DT_REQ,  DT_U32,  0},
 	{"qcom,clk-freq-in",		&ctrl->rsrcs.clk_freq_in,
@@ -2509,6 +2506,9 @@ static int i2c_msm_rsrcs_process_dt(struct i2c_msm_ctrl *ctrl,
 							DT_OPT,  DT_U32,  -1},
 	{"qcom,fs-clk-div",		&fs_clk_div,
 							DT_OPT,  DT_U32,  -1},
+	{"qcom,auto-resume-from-sys-suspend",
+					&(ctrl->rsrcs.auto_resume_from_sys_suspend),
+							DT_OPT,  DT_BOOL, 0},
 	{NULL,  NULL,					0,       0,       0},
 	};
 
@@ -2995,6 +2995,7 @@ static int i2c_msm_remove(struct platform_device *pdev)
 	/* Grab mutex to ensure ongoing transaction is over */
 	mutex_lock(&ctrl->xfer.mtx);
 	ctrl->pwr_state = I2C_MSM_PM_SYS_SUSPENDED;
+	ctrl->rsrcs.auto_resume_from_sys_suspend = false;
 	pm_runtime_disable(ctrl->dev);
 	/* no one can call a xfer after the next line */
 	i2c_msm_frmwrk_unreg(ctrl);

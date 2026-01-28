@@ -1322,7 +1322,7 @@ static void __exit cw_bat_exit(void)
 	i2c_del_driver(&cw_bat_driver);
 }
 
-late_initcall(cw_bat_init);
+module_init(cw_bat_init);
 module_exit(cw_bat_exit);
 
 MODULE_AUTHOR("ben<ben.chen@cellwise-semi.com>");

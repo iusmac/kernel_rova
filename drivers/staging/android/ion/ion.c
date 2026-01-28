@@ -1199,7 +1199,7 @@ static const struct file_operations ion_fops = {
 #ifdef CONFIG_ION_LEGACY
 	.compat_ioctl	= compat_ion_ioctl,
 #else
-	.compat_ioctl	= ion_ioctl,
+	.compat_ioctl	= compat_ptr_ioctl,
 #endif
 #endif
 };

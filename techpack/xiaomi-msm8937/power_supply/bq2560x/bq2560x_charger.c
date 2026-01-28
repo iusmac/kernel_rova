@@ -2267,7 +2267,7 @@ static int bq2560x_charger_probe(struct i2c_client *client,
 
 	usb_psy = power_supply_get_by_name("usb");
 	if (!usb_psy) {
-		dev_dbg(&client->dev, "USB supply not found, defer probe\n");
+		dev_err(&client->dev, "USB supply not found, defer probe\n");
 		return -EPROBE_DEFER;
 	}
 

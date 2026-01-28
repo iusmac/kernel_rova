@@ -3230,7 +3230,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 
 	usb_psy = power_supply_get_by_name("usb");
 	if (!usb_psy) {
-		dev_dbg(&client->dev, "USB psy not found; deferring probe\n");
+		dev_err(&client->dev, "USB psy not found; deferring probe\n");
 		return -EPROBE_DEFER;
 	}
 
