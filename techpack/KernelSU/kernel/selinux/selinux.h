@@ -6,17 +6,10 @@
 #include "linux/cred.h"
 
 #include "objsec.h"
-#ifdef SAMSUNG_SELINUX_PORTING
 #include "security.h" // Samsung SELinux Porting
-#endif
+
 #ifndef KSU_COMPAT_USE_SELINUX_STATE
 #include "avc.h"
-#endif
-
-#ifdef KSU_OPTIONAL_SELINUX_CRED
-#define __selinux_cred(cred) (selinux_cred(cred))
-#else
-#define __selinux_cred(cred) (cred->security)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
@@ -38,19 +31,22 @@ static inline u32 current_sid(void)
 }
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 1, 0) &&                           \
-     !defined(KSU_OPTIONAL_SELINUX_CRED))
-static inline taskcred_sec_t *selinux_cred(const struct cred *cred)
-{
-	return (taskcred_sec_t *)cred->security;
-}
-#endif
+// TODO: rename to "ksu"
+#define KERNEL_SU_DOMAIN "su"
+#define KERNEL_SU_FILE "ksu_file"
 
-void setup_selinux(const char *);
+#define KERNEL_SU_CONTEXT "u:r:" KERNEL_SU_DOMAIN ":s0"
+#define KSU_FILE_CONTEXT "u:object_r:" KERNEL_SU_FILE ":s0"
+#define ZYGOTE_CONTEXT "u:r:zygote:s0"
+#define INIT_CONTEXT "u:r:init:s0"
+
+void setup_selinux(const char *, struct cred *);
 
 void setenforce(bool);
 
 bool getenforce();
+
+void cache_sid(void);
 
 bool is_task_ksu_domain(const struct cred* cred);
 
@@ -62,8 +58,8 @@ bool is_init(const struct cred* cred);
 
 void apply_kernelsu_rules();
 
-u32 ksu_get_ksu_file_sid();
-
 int handle_sepolicy(unsigned long arg3, void __user *arg4);
+
+void setup_ksu_cred();
 
 #endif

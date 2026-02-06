@@ -16,6 +16,13 @@ config KSU_DEBUG
 	help
 	  Enable KernelSU debug mode.
 
+config KSU_ALLOWLIST_WORKAROUND
+	bool "KernelSU allowlist workaround"
+	depends on KSU
+	default n
+	help
+	  Enable workaround for broken allowlist save
+
 # For easier extern ifdef handling
 config KSU_MANUAL_HOOK
 	bool "KernelSU manual hook mode."
@@ -30,7 +37,7 @@ config KSU_KPROBES_HOOK
 	depends on KSU && !KSU_MANUAL_HOOK
 	depends on KRETPROBES && KPROBES && HAVE_SYSCALL_TRACEPOINTS
 	default y if KPROBES && KRETPROBES && HAVE_SYSCALL_TRACEPOINTS
-	default n
+	default y if !KSU_MANUAL_HOOK
 	help
 	  Enable KPROBES, KRETPROBES and TRACEPOINT hook for KernelSU core.
 	  This should not be used on kernel below 5.10.
