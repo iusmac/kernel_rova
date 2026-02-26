@@ -2648,6 +2648,10 @@ static void msm_chg_detect_work(struct work_struct *w)
 			motg->chg_type = USB_INVALID_CHARGER;
 			msm_chg_block_off(motg);
 			pm_runtime_put_sync(phy->dev);
+			/* Cable disconnected during charger type detection. Kick the
+			 * state-machine to schedule work to finish cable disconnect
+			 * processing */
+			queue_work(motg->otg_wq, &motg->sm_work);
 			return;
 		}
 
