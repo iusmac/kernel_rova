@@ -2753,6 +2753,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 
 			motg->chg_state = USB_CHG_STATE_UNDEFINED;
 			if (motg->chg_type == USB_SDP_CHARGER ||
+			    motg->chg_type == USB_NONCOMPLIANT_CHARGER ||
 			    motg->chg_type == USB_CDP_CHARGER)
 				queue_sm_work = true;
 
@@ -2769,6 +2770,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 		}
 
 		if (motg->chg_type == USB_CDP_CHARGER ||
+		    motg->chg_type == USB_NONCOMPLIANT_CHARGER ||
 		    motg->chg_type == USB_SDP_CHARGER)
 			queue_work(motg->otg_wq, &motg->sm_work);
 
