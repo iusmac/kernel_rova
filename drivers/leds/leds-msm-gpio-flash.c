@@ -32,6 +32,9 @@
 #include <linux/pinctrl/consumer.h>
 
 #include <linux/hrtimer.h>
+#include <linux/pm_wakeup.h>
+#include <linux/pm_qos.h>
+#include <linux/atomic.h>
 
 /* #define CONFIG_GPIO_FLASH_DEBUG */
 #undef CDBG
@@ -52,6 +55,8 @@
 #define FLASH_LED_FLASH_TRIGGER     200
 
 #define LED_PWM_PERIOD_NS_DEFAULT   5000000 // 5ms (200HZ)
+#define LED_PWM_ENABLE_PC_LATENCY   PM_QOS_DEFAULT_VALUE
+#define LED_PWM_DISABLE_PC_LATENCY  100
 
 enum msm_flash_seq_type_t {
 	FLASH_EN,
@@ -97,6 +102,9 @@ struct led_pwm_gpio_data {
 	bool running;
 	bool led_on;
 	bool use_flash_now_gpio;
+	struct wakeup_source *wakeup_src;
+	atomic_t qos_add_request_done;
+	struct pm_qos_request pm_qos_req;
 };
 
 static const struct of_device_id led_gpio_flash_of_match[] = {
@@ -130,6 +138,9 @@ static enum hrtimer_restart led_gpio_pwm_timer_callback(
 
 	return HRTIMER_RESTART;
 }
+
+static void led_gpio_pwm_pm_qos_update_request(
+		struct led_pwm_gpio_data *led_dat, int val);
 
 static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 				    enum led_brightness value)
@@ -171,6 +182,12 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 		brightness != LED_FULL && max_brightness > 0) {
 		if (led_pwm_dat->running)
 			hrtimer_cancel(&led_pwm_dat->pwm_timer);
+		else {
+			__pm_stay_awake(led_pwm_dat->wakeup_src);
+			/* Disable power collapse latency */
+			led_gpio_pwm_pm_qos_update_request(led_pwm_dat,
+				LED_PWM_DISABLE_PC_LATENCY);
+		}
 		/* Switch to "bit-banging" the (stronger) flash GPIO when reached the
 		 * higher brightness level, also adapt PWM period. */
 		led_pwm_dat->use_flash_now_gpio = flash_now == GPIO_OUT_HIGH;
@@ -183,6 +200,10 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 	} else if (led_pwm_dat && led_pwm_dat->running) {
 		led_pwm_dat->running = false;
 		hrtimer_cancel(&led_pwm_dat->pwm_timer);
+		__pm_relax(led_pwm_dat->wakeup_src);
+		/* Re-enable power collapse latency */
+		led_gpio_pwm_pm_qos_update_request(led_pwm_dat,
+			LED_PWM_ENABLE_PC_LATENCY);
 	}
 
 	if (flash_led->gpio_type[FLASH_EN] == NORMAL_GPIO) {
@@ -501,6 +522,7 @@ static int led_gpio_get_dt_data(struct device *dev,
 static struct led_pwm_gpio_data *led_gpio_set_up_pwm(struct device *dev,
 			struct gpio_desc *gpiod_en, struct gpio_desc *gpiod_now)
 {
+	int rc = 0;
 	struct led_pwm_gpio_data *led_dat = NULL;
 
 #if IS_ENABLED(CONFIG_PARSE_ANDROIDBOOT_MODE)
@@ -517,6 +539,11 @@ static struct led_pwm_gpio_data *led_gpio_set_up_pwm(struct device *dev,
 	if (led_dat == NULL)
 		return ERR_PTR(-ENOMEM);
 
+	led_dat->wakeup_src = wakeup_source_register(dev, LED_GPIO_FLASH_DRIVER_NAME);
+	if (!led_dat->wakeup_src)
+		return ERR_PTR(-ENOMEM);
+
+	atomic_set(&led_dat->qos_add_request_done, 0);
 	led_dat->gpiod_en = gpiod_en;
 	led_dat->gpiod_now = gpiod_now;
 
@@ -527,6 +554,39 @@ static struct led_pwm_gpio_data *led_gpio_set_up_pwm(struct device *dev,
 		pr_err("%s: unable to use High-Resolution timer\n", __func__);
 
 	return led_dat;
+
+error:
+	if (led_dat->wakeup_src)
+		wakeup_source_unregister(led_dat->wakeup_src);
+
+	return ERR_PTR(rc);
+}
+
+static inline void led_gpio_pwm_pm_qos_add_request(
+		struct led_pwm_gpio_data *led_dat)
+{
+	CDBG("%s: add request\n", __func__);
+	if (atomic_cmpxchg(&led_dat->qos_add_request_done, 0, 1))
+		return;
+	pm_qos_add_request(&led_dat->pm_qos_req, PM_QOS_CPU_DMA_LATENCY,
+		PM_QOS_DEFAULT_VALUE);
+}
+
+static void led_gpio_pwm_pm_qos_update_request(
+		struct led_pwm_gpio_data *led_dat, int val)
+{
+	led_gpio_pwm_pm_qos_add_request(led_dat);
+	CDBG("%s: update request %d\n", __func__, val);
+	pm_qos_update_request(&led_dat->pm_qos_req, val);
+}
+
+static void led_gpio_pwm_pm_qos_remove_request(
+		struct led_pwm_gpio_data *led_dat)
+{
+	CDBG("%s: remove request\n");
+	if (atomic_read(&led_dat->qos_add_request_done)) {
+		pm_qos_remove_request(&led_dat->pm_qos_req);
+	}
 }
 
 static int led_gpio_flash_probe(struct platform_device *pdev)
@@ -640,7 +700,10 @@ static int led_gpio_flash_remove(struct platform_device *pdev)
 		 * avoid accessing the freed memory. */
 		if (flash_led->led_pwm_gpio->running) {
 			hrtimer_cancel(&flash_led->led_pwm_gpio->pwm_timer);
+			__pm_relax(flash_led->led_pwm_gpio->wakeup_src);
 		}
+		led_gpio_pwm_pm_qos_remove_request(flash_led->led_pwm_gpio);
+		wakeup_source_unregister(flash_led->led_pwm_gpio->wakeup_src);
 	}
 	led_classdev_unregister(&flash_led->cdev);
 	devm_kfree(&pdev->dev, flash_led);
