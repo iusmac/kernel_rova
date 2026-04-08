@@ -13,6 +13,8 @@
 		qcom,max-current = <800>;
 		qcom,duration = <1280>;
 		qcom,current = <400>;
+		qcom,flash-en-pwm-period-ns = <307775>; // ~3.249kHz
+		qcom,flash-now-pwm-period-ns = <500000>; // 2kHz
 		linux,name = "flashlight";
 		linux,default-trigger = "flashlight-trigger";
 	};
