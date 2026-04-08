@@ -49,6 +49,8 @@
 
 #define DUTY_CYCLE_BASE       100
 
+#define FLASH_LED_FLASH_TRIGGER     200
+
 #define LED_PWM_PERIOD_NS_DEFAULT   5000000 // 5ms (200HZ)
 
 enum msm_flash_seq_type_t {
@@ -142,7 +144,7 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 	int max_brightness = flash_led->cdev.max_brightness;
 	u32 pwm_period_ns = flash_led->flash_en_pwm_period_ns;
 
-	if (brightness > 200) {
+	if (brightness > FLASH_LED_FLASH_TRIGGER) {
 		flash_en =
 			flash_led->ctrl_seq[FLASH_EN].flash_on_val;
 		flash_now =
@@ -162,9 +164,10 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 
 	/* Start the software-based PWM to control the intensity of the
 	 * "torch-only" mode for brightness levels that are outside of the standard
-	 * LED_{FULL/HALF} ranges.
+	 * LED_{FULL/HALF} and FLASH_LED_FLASH_TRIGGER ranges.
 	 */
 	if (led_pwm_dat && brightness != LED_OFF && brightness != LED_HALF &&
+		brightness != FLASH_LED_FLASH_TRIGGER &&
 		brightness != LED_FULL && max_brightness > 0) {
 		if (led_pwm_dat->running)
 			hrtimer_cancel(&led_pwm_dat->pwm_timer);
