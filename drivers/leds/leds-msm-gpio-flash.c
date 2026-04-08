@@ -31,6 +31,8 @@
 #endif
 #include <linux/pinctrl/consumer.h>
 
+#include <linux/hrtimer.h>
+
 /* #define CONFIG_GPIO_FLASH_DEBUG */
 #undef CDBG
 #ifdef CONFIG_GPIO_FLASH_DEBUG
@@ -46,6 +48,8 @@
 #define GPIO_OUT_HIGH         (1 << 1)
 
 #define DUTY_CYCLE_BASE       100
+
+#define LED_PWM_PERIOD_NS_DEFAULT   5000000 // 5ms (200HZ)
 
 enum msm_flash_seq_type_t {
 	FLASH_EN,
@@ -77,12 +81,53 @@ struct led_gpio_flash_data {
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *gpio_state_default;
 	struct msm_flash_ctrl_seq ctrl_seq[2];
+	u32 flash_en_pwm_period_ns;
+	u32 flash_now_pwm_period_ns;
+	struct led_pwm_gpio_data *led_pwm_gpio;
+};
+
+struct led_pwm_gpio_data {
+	struct gpio_desc *gpiod_en;
+	struct gpio_desc *gpiod_now;
+	struct hrtimer pwm_timer;
+	u32 on_time;
+	u32 off_time;
+	bool running;
+	bool led_on;
+	bool use_flash_now_gpio;
 };
 
 static const struct of_device_id led_gpio_flash_of_match[] = {
 	{.compatible = LED_GPIO_FLASH_DRIVER_NAME,},
 	{},
 };
+
+static enum hrtimer_restart led_gpio_pwm_timer_callback(
+		struct hrtimer *timer)
+{
+	struct led_pwm_gpio_data *led_dat =
+		container_of(timer, struct led_pwm_gpio_data, pwm_timer);
+
+	if (led_dat->led_on) {
+		if (led_dat->use_flash_now_gpio)
+			gpiod_set_value(led_dat->gpiod_now, GPIO_OUT_LOW);
+		else
+			gpiod_set_value(led_dat->gpiod_en, GPIO_OUT_LOW);
+		led_dat->led_on = false;
+		hrtimer_forward_now(&led_dat->pwm_timer,
+			ns_to_ktime(led_dat->off_time));
+	} else {
+		if (led_dat->use_flash_now_gpio)
+			gpiod_set_value(led_dat->gpiod_now, GPIO_OUT_HIGH);
+		else
+			gpiod_set_value(led_dat->gpiod_en, GPIO_OUT_HIGH);
+		led_dat->led_on = true;
+		hrtimer_forward_now(&led_dat->pwm_timer,
+			ns_to_ktime(led_dat->on_time));
+	}
+
+	return HRTIMER_RESTART;
+}
 
 static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 				    enum led_brightness value)
@@ -93,6 +138,9 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 	int flash_now = 0;
 	struct led_gpio_flash_data *flash_led =
 	    container_of(led_cdev, struct led_gpio_flash_data, cdev);
+	struct led_pwm_gpio_data *led_pwm_dat = flash_led->led_pwm_gpio;
+	int max_brightness = flash_led->cdev.max_brightness;
+	u32 pwm_period_ns = flash_led->flash_en_pwm_period_ns;
 
 	if (brightness > 200) {
 		flash_en =
@@ -109,7 +157,30 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 		flash_now = 0;
 	}
 
-	CDBG("%s:flash_en=%d, flash_now=%d\n", __func__, flash_en, flash_now);
+	CDBG("%s:brightness=%d, flash_en=%d, flash_now=%d\n", __func__, brightness,
+		flash_en, flash_now);
+
+	/* Start the software-based PWM to control the intensity of the
+	 * "torch-only" mode for brightness levels that are outside of the standard
+	 * LED_{FULL/HALF} ranges.
+	 */
+	if (led_pwm_dat && brightness != LED_OFF && brightness != LED_HALF &&
+		brightness != LED_FULL && max_brightness > 0) {
+		if (led_pwm_dat->running)
+			hrtimer_cancel(&led_pwm_dat->pwm_timer);
+		/* Switch to "bit-banging" the (stronger) flash GPIO when reached the
+		 * higher brightness level, also adapt PWM period. */
+		led_pwm_dat->use_flash_now_gpio = flash_now == GPIO_OUT_HIGH;
+		if (led_pwm_dat->use_flash_now_gpio)
+			pwm_period_ns = flash_led->flash_now_pwm_period_ns;
+		led_pwm_dat->on_time =
+			(u64)brightness * pwm_period_ns / max_brightness;
+		led_pwm_dat->off_time = pwm_period_ns - led_pwm_dat->on_time;
+		led_pwm_dat->running = true;
+	} else if (led_pwm_dat && led_pwm_dat->running) {
+		led_pwm_dat->running = false;
+		hrtimer_cancel(&led_pwm_dat->pwm_timer);
+	}
 
 	if (flash_led->gpio_type[FLASH_EN] == NORMAL_GPIO) {
 		rc = gpio_direction_output(flash_led->flash_en, flash_en);
@@ -147,6 +218,15 @@ static void led_gpio_brightness_set(struct led_classdev *led_cdev,
 	if (rc) {
 		pr_err("%s: Failed to set flash now.\n", __func__);
 		return;
+	}
+
+	if (led_pwm_dat) {
+		/* Track the LED state even if PWM is not running to resume gracefully. */
+		led_pwm_dat->led_on = !!((flash_en | flash_now) & GPIO_OUT_HIGH);
+		if (led_pwm_dat->running) {
+			hrtimer_start(&led_pwm_dat->pwm_timer, ns_to_ktime(0),
+					HRTIMER_MODE_REL_PINNED);
+		}
 	}
 
 	flash_led->brightness = brightness;
@@ -398,7 +478,47 @@ static int led_gpio_get_dt_data(struct device *dev,
 		}
 	}
 
+	rc = of_property_read_u32(node, "qcom,flash-en-pwm-period-ns",
+		&flash_led->flash_en_pwm_period_ns);
+	if (rc)
+		flash_led->flash_en_pwm_period_ns = LED_PWM_PERIOD_NS_DEFAULT;
+
+	rc = of_property_read_u32(node, "qcom,flash-now-pwm-period-ns",
+		&flash_led->flash_now_pwm_period_ns);
+	if (rc)
+		flash_led->flash_now_pwm_period_ns = LED_PWM_PERIOD_NS_DEFAULT;
+
+	CDBG("%s: flash_en_pwm_period_ns=%u, flash_now_pwm_period_ns=%u\n",
+			__func__, flash_led->flash_en_pwm_period_ns,
+			flash_led->flash_now_pwm_period_ns);
+
 	return rc;
+}
+
+static struct led_pwm_gpio_data *led_gpio_set_up_pwm(struct device *dev,
+			struct gpio_desc *gpiod_en, struct gpio_desc *gpiod_now)
+{
+	struct led_pwm_gpio_data *led_dat = NULL;
+
+	if (gpiod_cansleep(gpiod_en) || gpiod_cansleep(gpiod_now)) {
+		pr_err("%s: sleeping GPIO not supported.\n", __func__);
+		return NULL;
+	}
+
+	led_dat = devm_kzalloc(dev, sizeof(struct led_pwm_gpio_data), GFP_KERNEL);
+	if (led_dat == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	led_dat->gpiod_en = gpiod_en;
+	led_dat->gpiod_now = gpiod_now;
+
+	hrtimer_init(&led_dat->pwm_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL_PINNED);
+	led_dat->pwm_timer.function = led_gpio_pwm_timer_callback;
+
+	if (!hrtimer_is_hres_active(&led_dat->pwm_timer))
+		pr_err("%s: unable to use High-Resolution timer\n", __func__);
+
+	return led_dat;
 }
 
 static int led_gpio_flash_probe(struct platform_device *pdev)
@@ -438,6 +558,20 @@ static int led_gpio_flash_probe(struct platform_device *pdev)
 		pr_err("%s: get device tree data failed.\n",
 				__func__);
 		goto error;
+	}
+
+	/* Set up software-based PWM to regulate brightness using hrtimer when
+	 * torch PIN attached to a normal GPIO.
+	 */
+	if (flash_led->flash_en && flash_led->flash_now) {
+		flash_led->led_pwm_gpio = led_gpio_set_up_pwm(&pdev->dev,
+			gpio_to_desc(flash_led->flash_en),
+			gpio_to_desc(flash_led->flash_now));
+		if (IS_ERR(flash_led->led_pwm_gpio)) {
+			rc = PTR_ERR(flash_led->led_pwm_gpio);
+			pr_err("%s: Failed to set up PWM. rc = %d\n", __func__, rc);
+			goto error;
+		}
 	}
 
 	/* Add these atomic variables to make sure clk is disabled
@@ -493,6 +627,13 @@ static int led_gpio_flash_remove(struct platform_device *pdev)
 	    (struct led_gpio_flash_data *)platform_get_drvdata(pdev);
 	if (IS_ERR(flash_led->pinctrl))
 		devm_pinctrl_put(flash_led->pinctrl);
+	if (flash_led->led_pwm_gpio) {
+		/* Stop the software-based PWM "torch-only" mode timer, if running, to
+		 * avoid accessing the freed memory. */
+		if (flash_led->led_pwm_gpio->running) {
+			hrtimer_cancel(&flash_led->led_pwm_gpio->pwm_timer);
+		}
+	}
 	led_classdev_unregister(&flash_led->cdev);
 	devm_kfree(&pdev->dev, flash_led);
 	return 0;
