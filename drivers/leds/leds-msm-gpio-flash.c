@@ -503,6 +503,11 @@ static struct led_pwm_gpio_data *led_gpio_set_up_pwm(struct device *dev,
 {
 	struct led_pwm_gpio_data *led_dat = NULL;
 
+#if IS_ENABLED(CONFIG_PARSE_ANDROIDBOOT_MODE)
+	if (androidboot_mode_get() == ANDROIDBOOT_MODE_RECOVERY)
+		return NULL;
+#endif
+
 	if (gpiod_cansleep(gpiod_en) || gpiod_cansleep(gpiod_now)) {
 		pr_err("%s: sleeping GPIO not supported.\n", __func__);
 		return NULL;
