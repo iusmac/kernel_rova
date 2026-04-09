@@ -124,7 +124,7 @@ static enum hrtimer_restart led_gpio_pwm_timer_callback(
 		else
 			gpiod_set_value(led_dat->gpiod_en, GPIO_OUT_LOW);
 		led_dat->led_on = false;
-		hrtimer_forward_now(&led_dat->pwm_timer,
+		hrtimer_forward(&led_dat->pwm_timer, hrtimer_get_expires(timer),
 			ns_to_ktime(led_dat->off_time));
 	} else {
 		if (led_dat->use_flash_now_gpio)
@@ -132,7 +132,7 @@ static enum hrtimer_restart led_gpio_pwm_timer_callback(
 		else
 			gpiod_set_value(led_dat->gpiod_en, GPIO_OUT_HIGH);
 		led_dat->led_on = true;
-		hrtimer_forward_now(&led_dat->pwm_timer,
+		hrtimer_forward(&led_dat->pwm_timer, hrtimer_get_expires(timer),
 			ns_to_ktime(led_dat->on_time));
 	}
 
