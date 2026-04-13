@@ -2631,7 +2631,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 	struct usb_phy *phy = &motg->phy;
 	bool is_dcd = false, tmout, vout, queue_sm_work = false;
 	static bool dcd;
-	u32 dcd_ctrl, line_state, dm_vlgc;
+	u32 line_state, dm_vlgc;
 	unsigned long delay = 0;
 
 	if (work_pending(&motg->sm_work)) {
@@ -2668,17 +2668,6 @@ static void msm_chg_detect_work(struct work_struct *w)
 		if (!motg->vbus_state) {
 			motg->chg_state = USB_CHG_STATE_IN_PROGRESS;
 			break;
-		}
-
-		/*
-		 * Ensure DCD is actually enabled before checking the status to avoid
-		 * hitting the timeout and misinterpreting this charger type (e.g.,
-		 * non-compliant) whereas it may be a fully functional SDP connection
-		 */
-		dcd_ctrl = ulpi_read(phy, 0x85);
-		if (WARN(!(dcd_ctrl & 0x10), "Detected unexpected USB PHY registers altering while DCD polling! (0x85=0x%x)\n", dcd_ctrl)) {
-			msm_chg_block_on(motg);
-			msm_chg_enable_dcd(motg);
 		}
 
 		is_dcd = msm_chg_check_dcd(motg);
