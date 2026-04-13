@@ -2634,6 +2634,10 @@ static void msm_chg_detect_work(struct work_struct *w)
 	u32 dcd_ctrl, line_state, dm_vlgc;
 	unsigned long delay = 0;
 
+	if (work_pending(&motg->sm_work)) {
+		goto queue_delayed_chg_work;
+	}
+
 	dev_dbg(phy->dev, "chg detection work\n");
 	msm_otg_dbg_log_event(phy, "CHG DETECTION WORK",
 			motg->chg_state, get_pm_runtime_counter(phy->dev));
@@ -2794,6 +2798,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 		return;
 	}
 
+queue_delayed_chg_work:
 	msm_otg_dbg_log_event(phy, "CHG WORK: QUEUE", motg->chg_type, delay);
 	queue_delayed_work(motg->otg_wq, &motg->chg_work, delay);
 }
