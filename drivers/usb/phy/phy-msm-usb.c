@@ -2957,7 +2957,8 @@ static void msm_otg_sm_work(struct work_struct *w)
 
 			msm_otg_start_host(otg, 1);
 			otg->state = OTG_STATE_A_HOST;
-		} else if (test_bit(B_SESS_VLD, &motg->inputs)) {
+		} else if (test_bit(B_SESS_VLD, &motg->inputs) &&
+				motg->chg_type != USB_INVALID_CHARGER) {
 			pr_debug("b_sess_vld\n");
 			msm_otg_dbg_log_event(phy, "B_SESS_VLD",
 					motg->inputs, otg->state);
@@ -4422,6 +4423,8 @@ static int msm_otg_probe(struct platform_device *pdev)
 	motg->dbg_idx = 0;
 	motg->dbg_lock = __RW_LOCK_UNLOCKED(lck);
 	mutex_init(&motg->lock);
+
+	motg->chg_type = USB_INVALID_CHARGER;
 
 	if (motg->pdata->bus_scale_table) {
 		motg->bus_perf_client =
