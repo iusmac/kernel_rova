@@ -206,6 +206,11 @@ static int msm_usb_psy_set_property(struct power_supply *psy,
 			*/
 			if (data->usb_supply_type == POWER_SUPPLY_TYPE_UNKNOWN)
 				data->usb_psy_d.type = POWER_SUPPLY_TYPE_USB;
+			/* healthd doesn't know about floated (USB_FLOAT) chargers (which
+			 * are mostly "dump" wall/AC chargers), so show DCP instead to
+			 * prevent it from detecting this power_supply status change. */
+			else if (data->usb_supply_type == POWER_SUPPLY_TYPE_USB_FLOAT)
+				data->usb_psy_d.type = POWER_SUPPLY_TYPE_USB_DCP;
 			else
 				data->usb_psy_d.type = data->usb_supply_type;
 			break;
