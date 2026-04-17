@@ -4182,6 +4182,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 			break;
 		case XIAOMI_MSM8937_MACH_RIVA:
 		case XIAOMI_MSM8937_MACH_ROLEX:
+			floated_charger_enable = true;
 		case XIAOMI_MSM8937_MACH_TIARE:
 			idev_chg_max = 1000;
 			dcp_max_current = 1000;
