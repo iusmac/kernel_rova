@@ -658,6 +658,8 @@ static int led_gpio_flash_probe(struct platform_device *pdev)
 	flash_led->cdev.brightness_set = led_gpio_brightness_set;
 	flash_led->cdev.brightness_get = led_gpio_brightness_get;
 
+	flash_led->cdev.flags |= LED_PANIC_INDICATOR;
+
 	rc = led_classdev_register(&pdev->dev, &flash_led->cdev);
 	if (rc) {
 		pr_err("%s: Failed to register led dev. rc = %d\n",
