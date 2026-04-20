@@ -211,19 +211,14 @@ reg_vdd_put:
 	return rc;
 }
 
-static void aw2013_brightness_work(struct work_struct *work)
+static void aw2013_brightness_set_unlocked(struct aw2013_led *led)
 {
-	struct aw2013_led *led = container_of(work, struct aw2013_led,
-					brightness_work);
 	u8 val;
-
-	mutex_lock(&led->pdata->led->lock);
 
 	/* enable regulators if they are disabled */
 	if (!led->pdata->led->poweron) {
 		if (aw2013_power_on(led->pdata->led, true)) {
 			dev_err(&led->pdata->led->client->dev, "power on failed");
-			mutex_unlock(&led->pdata->led->lock);
 			return;
 		}
 	}
@@ -253,11 +248,18 @@ static void aw2013_brightness_work(struct work_struct *work)
 		if (aw2013_power_on(led->pdata->led, false)) {
 			dev_err(&led->pdata->led->client->dev,
 				"power off failed");
-			mutex_unlock(&led->pdata->led->lock);
 			return;
 		}
 	}
+}
 
+static void aw2013_brightness_work(struct work_struct *work)
+{
+	struct aw2013_led *led = container_of(work, struct aw2013_led,
+					brightness_work);
+
+	mutex_lock(&led->pdata->led->lock);
+	aw2013_brightness_set_unlocked(led);
 	mutex_unlock(&led->pdata->led->lock);
 }
 
@@ -316,7 +318,11 @@ static void aw2013_set_brightness(struct led_classdev *cdev,
 	struct aw2013_led *led = container_of(cdev, struct aw2013_led, cdev);
 	led->cdev.brightness = brightness;
 
-	schedule_work(&led->brightness_work);
+	/* Set LED brightness NOW when panicking as work queue won't run. */
+	if (unlikely(panic_in_progress()))
+		aw2013_brightness_set_unlocked(led);
+	else
+		schedule_work(&led->brightness_work);
 }
 
 static ssize_t aw2013_store_blink(struct device *dev,
