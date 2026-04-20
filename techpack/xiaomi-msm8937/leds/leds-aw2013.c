@@ -23,6 +23,9 @@
 #include <xiaomi-msm8937/mach.h>
 #include "leds-aw2013.h"
 
+#include <linux/kernel.h>
+#include <linux/notifier.h>
+
 /* register address */
 #define AW_REG_RESET			0x00
 #define AW_REG_GLOBAL_CONTROL		0x01
@@ -63,6 +66,7 @@ struct aw2013_led {
 	int num_leds;
 	int id;
 	bool poweron;
+	struct notifier_block panic_nb;
 };
 
 static int aw2013_write(struct aw2013_led *led, u8 reg, u8 val)
@@ -505,6 +509,10 @@ static int aw2013_led_parse_child_node(struct aw2013_led *led_array,
 
 		led->cdev.brightness_set = aw2013_set_brightness;
 
+		/* Let the first LED (red?) be the panic indicator */
+		if (parsed_leds == 0)
+			led->cdev.flags |= LED_PANIC_INDICATOR;
+
 		rc = led_classdev_register(&led->client->dev, &led->cdev);
 		if (rc) {
 			dev_err(&led->client->dev,
@@ -540,6 +548,24 @@ free_pdata:
 free_err:
 	aw2013_led_err_handle(led_array, parsed_leds);
 	return rc;
+}
+
+static int aw2013_led_panic_notifier(struct notifier_block *nb,
+				      unsigned long code, void *unused)
+{
+	struct aw2013_led *leds = container_of(nb, struct aw2013_led, panic_nb);
+	int i, parsed_leds = leds->num_leds;
+
+	/* Prepare the selected LED to serve as a panic indicator, while keep others
+	 * disabled to avoid color mix-up. */
+	for (i = 0; i < parsed_leds; i++) {
+		if (leds[i].cdev.flags & LED_PANIC_INDICATOR)
+			leds[i].cdev.max_brightness = LED_FULL;
+		else
+			aw2013_led_blink_set(&leds[i], 0);
+	}
+
+	return NOTIFY_DONE;
 }
 
 static int aw2013_led_probe(struct i2c_client *client,
@@ -589,6 +615,9 @@ static int aw2013_led_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, led_array);
 
+	led_array->panic_nb.notifier_call = aw2013_led_panic_notifier;
+	atomic_notifier_chain_register(&panic_notifier_list, &led_array->panic_nb);
+
 	return 0;
 
 free_led_arry:
@@ -612,6 +641,7 @@ static int aw2013_led_remove(struct i2c_client *client)
 		led_array[i].pdata = NULL;
 	}
 	mutex_destroy(&led_array->lock);
+	atomic_notifier_chain_unregister(&panic_notifier_list, &led_array->panic_nb);
 	devm_kfree(&client->dev, led_array);
 	led_array = NULL;
 	return 0;
