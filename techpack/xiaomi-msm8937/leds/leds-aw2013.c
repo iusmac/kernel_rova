@@ -106,7 +106,9 @@ static int aw2013_power_on(struct aw2013_led *led, bool on)
 		}
 		msleep(100);
 		led->poweron = true;
-	} else {
+	} else if (!unlikely(panic_in_progress())) {
+		/* NOTE: do not disable regulators when CPU panicked; keep 'em up and
+		 * ready as the LED may serve as a panic indicator. */
 		rc = regulator_disable(led->vdd);
 		if (rc) {
 			dev_err(&led->client->dev,
@@ -555,6 +557,10 @@ static int aw2013_led_panic_notifier(struct notifier_block *nb,
 {
 	struct aw2013_led *leds = container_of(nb, struct aw2013_led, panic_nb);
 	int i, parsed_leds = leds->num_leds;
+
+	/* Ensure regulators are up and ready. */
+	if (!leds->pdata->led->poweron && aw2013_power_on(leds, true))
+		dev_err(&leds->pdata->led->client->dev, "%s: power on failed", __func__);
 
 	/* Prepare the selected LED to serve as a panic indicator, while keep others
 	 * disabled to avoid color mix-up. */
