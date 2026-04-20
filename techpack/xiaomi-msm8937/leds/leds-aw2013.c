@@ -104,7 +104,11 @@ static int aw2013_power_on(struct aw2013_led *led, bool on)
 				"Regulator vcc enable failed rc=%d\n", rc);
 			goto fail_enable_reg;
 		}
-		msleep(100);
+		if (unlikely(panic_in_progress())) { // NOTE: cannot sleep during panic
+			cpu_relax();
+			mdelay(100);
+		} else
+			msleep(100);
 		led->poweron = true;
 	} else if (!unlikely(panic_in_progress())) {
 		/* NOTE: do not disable regulators when CPU panicked; keep 'em up and
