@@ -26,6 +26,7 @@
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 #include <xiaomi-msm8937/mach.h>
+#include <linux/math64.h> /* div_u64() */
 
 struct vibrator_gpio_data {
 	struct	platform_device *dev;
@@ -35,6 +36,7 @@ struct vibrator_gpio_data {
 	unsigned	int gpio;
 	int	play_time_ms;
 	int	timeout;
+	int	brightness;
 	u8	active_low;
 	spinlock_t	lock;
 };
@@ -77,32 +79,44 @@ static ssize_t vibrator_gpio_store_state(struct device *dev,
 	return count;
 }
 
+static ktime_t vibrator_gpio_get_duration(struct led_classdev *led_dev)
+{
+	struct vibrator_gpio_data *pdata = container_of(led_dev,
+		struct vibrator_gpio_data, led_dev);
+
+	return hrtimer_active(&pdata->vib_timer) ?
+		hrtimer_get_remaining(&pdata->vib_timer) : ns_to_ktime(0);
+}
+
 static ssize_t vibrator_gpio_show_duration(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct led_classdev *led_dev = dev_get_drvdata(dev);
+	ktime_t time_ns = vibrator_gpio_get_duration(led_dev);
+
+	return snprintf(buf, PAGE_SIZE, "%lld\n", ktime_to_ms(time_ns));
+}
+
+static void vibrator_gpio_set_duration(struct led_classdev *led_dev,
+		u32 val)
+{
 	struct vibrator_gpio_data *pdata = container_of(led_dev,
 		struct vibrator_gpio_data, led_dev);
-	ktime_t time_rem;
-	s64 time_us = 0;
+	unsigned long flags;
 
-	if (hrtimer_active(&pdata->vib_timer)) {
-		time_rem = hrtimer_get_remaining(&pdata->vib_timer);
-		time_us = ktime_to_us(time_rem);
-		return snprintf(buf, PAGE_SIZE, "%lld\n", time_us / 1000);
-	} else
-		return 0;
+	spin_lock_irqsave(&pdata->lock, flags);
+	pdata->play_time_ms = val;
+	pr_debug("%s: timer value=%d\n", __func__,
+		pdata->play_time_ms);
+	spin_unlock_irqrestore(&pdata->lock, flags);
 }
 
 static ssize_t vibrator_gpio_store_duration(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct led_classdev *led_dev = dev_get_drvdata(dev);
-	struct vibrator_gpio_data *pdata = container_of(led_dev,
-		struct vibrator_gpio_data, led_dev);
 	u32 val;
 	int rc;
-	unsigned long flags;
 
 	rc = kstrtouint(buf, 0, &val);
 	if (rc < 0)
@@ -112,11 +126,7 @@ static ssize_t vibrator_gpio_store_duration(struct device *dev,
 	if (val <= 0)
 		return count;
 
-	spin_lock_irqsave(&pdata->lock, flags);
-	pdata->play_time_ms = val;
-	pr_debug("%s: timer value=%d\n", __func__,
-		pdata->play_time_ms);
-	spin_unlock_irqrestore(&pdata->lock, flags);
+	vibrator_gpio_set_duration(led_dev, val);
 
 	return count;
 }
@@ -128,32 +138,23 @@ static ssize_t vibrator_gpio_show_activate(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%d\n", 0);
 }
 
-static ssize_t vibrator_gpio_store_activate(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
+static void vibrator_gpio_set_activate(struct led_classdev *led_dev,
+		bool active)
 {
-	struct led_classdev *led_dev = dev_get_drvdata(dev);
 	struct vibrator_gpio_data *pdata = container_of(led_dev,
 		struct vibrator_gpio_data, led_dev);
-	u32 val;
-	int rc, timer = pdata->play_time_ms;
+	int timer = pdata->play_time_ms;
 	unsigned long flags;
-
-	rc = kstrtouint(buf, 0, &val);
-	if (rc < 0)
-		return rc;
-
-	if (val != 0 && val != 1)
-		return count;
 
 	spin_lock_irqsave(&pdata->lock, flags);
 
 	hrtimer_cancel(&pdata->vib_timer);
-	gpio_direction_output(pdata->gpio, pdata->active_low ? !val : !!val);
+	gpio_direction_output(pdata->gpio, pdata->active_low ? !active : active);
 	pr_debug("%s: gpio_enable data->gpio=%d\n", __func__, pdata->gpio);
 
-	if (val > 0 || timer > 0) {
-		if (val > pdata->timeout)
-			val = pdata->timeout;
+	if (active || timer > 0) {
+		if (timer > pdata->timeout)
+			timer = pdata->timeout;
 
 		hrtimer_start(&pdata->vib_timer,
 			ktime_set(timer / 1000,
@@ -162,6 +163,23 @@ static ssize_t vibrator_gpio_store_activate(struct device *dev,
 	}
 
 	spin_unlock_irqrestore(&pdata->lock, flags);
+}
+
+static ssize_t vibrator_gpio_store_activate(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct led_classdev *led_dev = dev_get_drvdata(dev);
+	u32 val;
+	int rc;
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	if (val != 0 && val != 1)
+		return count;
+
+	vibrator_gpio_set_activate(led_dev, !!val);
 
 	return count;
 }
@@ -178,15 +196,27 @@ static struct device_attribute vibrator_gpio_attrs[] = {
 		vibrator_gpio_store_activate),
 };
 
-/* Dummy functions for led class setting */
 static enum led_brightness vibrator_gpio_brightness_get(struct led_classdev *cdev)
 {
-	return 0;
+	struct vibrator_gpio_data *pdata = container_of(cdev,
+		struct vibrator_gpio_data, led_dev);
+	ktime_t time_ns = vibrator_gpio_get_duration(cdev);
+
+	return time_ns > 0 ? pdata->brightness : LED_OFF;
 }
 
 static void vibrator_gpio_brightness_set(struct led_classdev *cdev,
 					enum led_brightness level)
 {
+	struct vibrator_gpio_data *pdata = container_of(cdev,
+		struct vibrator_gpio_data, led_dev);
+
+	/* Convert brightness to duration limited to 1.5sec when level is
+	 * max_brightness. */
+	u32 duration = div_u64(level * 10000, cdev->max_brightness) * 1500 / 10000;
+	vibrator_gpio_set_duration(cdev, duration);
+	vibrator_gpio_set_activate(cdev, level != LED_OFF);
+	pdata->brightness = level;
 }
 
 static int vibrator_gpio_parse_dt(struct device *dev,struct vibrator_gpio_data *pdata)
