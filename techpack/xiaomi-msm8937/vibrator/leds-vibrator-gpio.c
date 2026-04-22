@@ -278,6 +278,7 @@ static int vibrator_gpio_probe(struct platform_device *pdev)
 	pdata->led_dev.brightness_get = vibrator_gpio_brightness_get;
 	pdata->led_dev.brightness_set = vibrator_gpio_brightness_set;
 	pdata->led_dev.max_brightness = LED_FULL;
+	pdata->led_dev.flags |= LED_PANIC_INDICATOR;
 
 	ret = gpio_request(pdata->gpio, pdata->name);
 	if (ret < 0) {
