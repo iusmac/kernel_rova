@@ -32,6 +32,8 @@
 #include <linux/msm-bus-board.h>
 #include <linux/i2c-msm-v2.h>
 
+#include <linux/ktime.h>
+
 #ifdef DEBUG
 static const enum msm_i2_debug_level DEFAULT_DBG_LVL = MSM_DBG;
 #else
@@ -2077,7 +2079,23 @@ static int i2c_msm_xfer_wait_for_completion(struct i2c_msm_ctrl *ctrl,
 	long  time_left;
 	int   ret = 0;
 
-	time_left = wait_for_completion_timeout(complete,
+	/* Poke the QUP ISR to poll the QUP controller and call complete() as IRQ
+	 * interrupts are disabled when CPU panicked. */
+	if (unlikely(panic_in_progress())) {
+		ktime_t tmout = ktime_add_us(ktime_get(),
+			jiffies_to_usecs(xfer->timeout));
+		for (;;) {
+			i2c_msm_qup_isr(-1, ctrl);
+			time_left = ktime_us_delta(tmout, ktime_get());
+			if (completion_done(complete) || time_left < 0)
+				break;
+			udelay(1);
+			cpu_relax();
+		}
+		/* Catch ISR errors in case completed after timeout. */
+		time_left = time_left > 0 ? time_left : completion_done(complete);
+	} else
+		time_left = wait_for_completion_timeout(complete,
 						xfer->timeout);
 	if (!time_left) {
 		xfer->err = I2C_MSM_ERR_TIMEOUT;
