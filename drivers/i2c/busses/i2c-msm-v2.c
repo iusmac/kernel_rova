@@ -1534,22 +1534,33 @@ static bool i2c_msm_qup_slv_holds_bus(struct i2c_msm_ctrl *ctrl)
 static int i2c_msm_qup_poll_bus_active_unset(struct i2c_msm_ctrl *ctrl)
 {
 	void __iomem *base    = ctrl->rsrcs.base;
-	ulong timeout = jiffies + msecs_to_jiffies(I2C_MSM_MAX_POLL_MSEC);
+	ktime_t now     = ns_to_ktime(0);
+	ktime_t timeout = ms_to_ktime(I2C_MSM_MAX_POLL_MSEC);
 	int    ret      = 0;
 	size_t read_cnt = 0;
 
-	do {
-		if (!(readl_relaxed(base + QUP_I2C_STATUS) & QUP_BUS_ACTIVE))
-			goto poll_active_end;
-		++read_cnt;
-	} while (time_before_eq(jiffies, timeout));
+	while (readl_relaxed(base + QUP_I2C_STATUS) & QUP_BUS_ACTIVE) {
+		if (unlikely(panic_in_progress())) // NOTE: cannot sleep during panic
+			udelay(1);
+		else
+			usleep_range(1, 2);
+		cpu_relax();
+		/* Begin the timeout after the next unsuccessful read (unlikely) */
+		now = ktime_get();
+		if (unlikely(++read_cnt > 1)) {
+			if (ktime_before(timeout, now)) {
+				ret = -EBUSY;
+				break;
+			}
+		} else
+			timeout = ktime_add_ms(now, timeout);
+	}
 
-	ret = -EBUSY;
-
-poll_active_end:
+#ifdef CONFIG_I2C_MSM_PROF_DBG
 	/* second logged value is time-left before timeout or zero if expired */
 	i2c_msm_prof_evnt_add(ctrl, MSM_DBG, I2C_MSM_ACTV_END,
-				ret, (ret ? 0 : (timeout - jiffies)), read_cnt);
+			ret, (ret ? 0 : ktime_to_ms(ktime_sub(timeout, now))), read_cnt);
+#endif /* CONFIG_I2C_MSM_PROF_DBG */
 
 	return ret;
 }
