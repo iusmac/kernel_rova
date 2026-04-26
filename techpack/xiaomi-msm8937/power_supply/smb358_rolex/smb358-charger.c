@@ -532,17 +532,6 @@ static void qpnp_lbc_temp_alarm_work_fn(struct work_struct *work)
 
 	struct smb358_charger *chip = container_of(work, struct smb358_charger, batt_temp_work);
 
-	smb358_read_reg(chip, IRQ_E_REG, &reg);
-	if (!reg) {
-		chip->chg_present = true;
-		power_supply_set_present(chip->usb_psy, chip->chg_present);
-	} else {
-		chip->chg_present = false;
-		smb358_charging_disable(chip, THERMAL, 1);
-		power_supply_set_present(chip->usb_psy, chip->chg_present);
-	}
-
-
 	if (!chip->chg_present) {
 		enabled_delay_times = DELAY_COUNT;
 		disabled_delay_times = DELAY_COUNT;
@@ -1900,8 +1889,6 @@ static int chg_uv(struct smb358_charger *chip, u8 status)
 	ktime_t kt;
 	/* use this to detect USB insertion only if !apsd */
 	if (chip->disable_apsd && status == 0) {
-		kt = ns_to_ktime(1LL*NSEC_PER_SEC);
-		alarm_start_relative(&chip->batt_temp_alarm, kt);
 		chip->chg_present = true;
 		pre_usb_current_ma = -EINVAL;
 
@@ -1910,6 +1897,8 @@ static int chg_uv(struct smb358_charger *chip, u8 status)
 
 
 
+		kt = ns_to_ktime(1LL*NSEC_PER_SEC);
+		alarm_start_relative(&chip->batt_temp_alarm, kt);
 		power_supply_set_present(chip->usb_psy, chip->chg_present);
 
 		if (chip->bms_controlled_charging)
@@ -3219,7 +3208,6 @@ static int smb358_charger_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
 {
 	int rc, irq;
-	ktime_t kt;
 
 	struct smb358_charger *chip;
 	struct power_supply *usb_psy;
@@ -3287,10 +3275,6 @@ static int smb358_charger_probe(struct i2c_client *client,
 
 	INIT_WORK(&chip->batt_temp_work, qpnp_lbc_temp_alarm_work_fn);
 	alarm_init(&chip->batt_temp_alarm, ALARM_REALTIME, batt_temp_alarm_callback);
-	if (chip->chg_present) {
-		kt = ns_to_ktime(5LL*NSEC_PER_SEC);
-		alarm_start_relative(&chip->batt_temp_alarm, kt);
-	}
 	/* probe the device to check if its actually connected */
 	rc = smb358_read_reg(chip, CHG_OTH_CURRENT_CTRL_REG, &reg);
 	if (rc) {
