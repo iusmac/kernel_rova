@@ -2544,6 +2544,14 @@ static void smb358_external_power_changed(struct power_supply *psy)
 	smb358_chg_set_appropriate_battery_current(chip);
 	smb358_chg_set_appropriate_vddmax(chip);
 
+	/* When the charger is not configured in autonomous mode and APSD was
+	 * disabled, the driver will be unable to do USB cable insertion detection
+	 * in our ISR handler that listens to the STAT pin. The PMIC always
+	 * monitors VBUS in the DCIN UV irq, so we can benefit of it and force
+	 * reread the UV register to do charging detection by ourselves. */
+	if (!chip->chg_autonomous_mode && chip->disable_apsd)
+		smb358_chg_stat_handler(chip->client->irq, chip);
+
 	pr_debug("current_limit = %d\n", current_limit);
 }
 
