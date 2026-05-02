@@ -1202,7 +1202,7 @@ static int smb358_get_prop_batt_status(struct smb358_charger *chip)
 
 	pr_debug("%s: STATUS_C_REG=%x\n", __func__, reg);
 
-	if ((chip->batt_full))
+	if ((chip->batt_full) && chip->chg_present && chip->power_ok)
 		return POWER_SUPPLY_STATUS_FULL;
 
 	if ((reg & STATUS_C_CHARGING_MASK) &&
