@@ -1188,6 +1188,7 @@ static enum power_supply_property smb358_battery_properties[] = {
 	POWER_SUPPLY_PROP_RESISTANCE_ID,
 };
 
+static int smb358_get_prop_batt_capacity(struct smb358_charger *chip);
 static int smb358_get_prop_batt_status(struct smb358_charger *chip)
 {
 	int rc;
@@ -1210,6 +1211,13 @@ static int smb358_get_prop_batt_status(struct smb358_charger *chip)
 		return POWER_SUPPLY_STATUS_CHARGING;
 	if ((reg & STATUS_C_CHG_HOLD_OFF_BIT) && chip->power_ok)
 		return POWER_SUPPLY_STATUS_NOT_CHARGING;
+
+	/* Chip is about to auto-recharge, so avoid STATUS_DISCHARGING and smooth
+	 * the transition from STATUS_FULL to STATUS_CHARGING in userspace. */
+	if (chip->power_ok && !chip->recharge_disabled &&
+			!(chip->charging_disabled_status & (USER | CURRENT)) &&
+			smb358_get_prop_batt_capacity(chip) == 100)
+		return POWER_SUPPLY_STATUS_FULL;
 
 	return POWER_SUPPLY_STATUS_DISCHARGING;
 }
