@@ -99,6 +99,9 @@ struct cw_battery {
 	struct pinctrl_state *pinctrl_state_active;
 	struct pinctrl_state *pinctrl_state_suspend;
 	struct pinctrl_state *pinctrl_state_release;
+
+	unsigned int estimated_charging_current_ua;
+	long last_estimated_charging_current_time;
 };
 
 
@@ -669,6 +672,74 @@ static bool cw_battery_valid_time_to_empty(struct cw_battery *cw_bat)
 		cw_bat->status == POWER_SUPPLY_STATUS_DISCHARGING;
 }
 
+static int cw_battery_measure_charging_current_ua(
+		int charge_full_design_uah,
+		int charge_start_sec,
+		int charge_stop_sec)
+{
+	long delta_sec = charge_stop_sec;
+
+	delta_sec -= charge_start_sec;
+	if (!delta_sec || delta_sec == charge_stop_sec)
+		return 0; // can't estimate, just return; also avoid dividing by zero
+	return charge_full_design_uah * 36 / delta_sec;
+}
+
+#define FAST_SMOOTHING_FACTOR 75 // in %
+#define SLOW_SMOOTHING_FACTOR 25 // in %
+static void rk_bat_update_estimated_charging_current_ua(
+		struct cw_battery *cw_bat,
+		int old_capacity,
+		long old_run_time_capacity_change)
+{
+	unsigned int *p_old_current_ua = &cw_bat->estimated_charging_current_ua;
+	unsigned int new_current_ua = 0;
+	u8 smoothing_factor;
+	bool current_bumped;
+
+	/* Estimate only when the charger is plugged in and not discharging. */
+	if (cw_bat->charger_mode > 0 && old_capacity <= cw_bat->capacity) {
+		/* Memoize the previous run time capacity change to estimate the speed
+		 * of this capacity jump. */
+		if (old_capacity < cw_bat->capacity)
+			cw_bat->last_estimated_charging_current_time =
+				(cw_bat->last_estimated_charging_current_time)
+				/* NOTE: a negated value is used as a marker to skip estimating
+				 * partial SOC updates (e.g., 50.9% > 51%) after system bootup
+				 * or when re-plugged, and wait for the next SOC update. */
+				? old_run_time_capacity_change : -1;
+		/* Estimate the charging current speed, based on the battery design
+		 * capacity and SOC change over time. */
+		if (cw_bat->last_estimated_charging_current_time > 0)
+			new_current_ua = cw_battery_measure_charging_current_ua(
+					cw_bat->battery.charge_full_design_uah,
+					cw_bat->last_estimated_charging_current_time,
+					cw_bat->run_time_capacity_change);
+		/* Choose a smoothing factor for EMA filter formula. */
+		if (!*p_old_current_ua)
+			/* Can't smooth w/o a previous estimation. Take the whole value. */
+			smoothing_factor = 100;
+		else if (abs(new_current_ua - *p_old_current_ua) > 100/*mA*/ * 1000)
+			/* Smooth faster on massive fluctuations/jumps. */
+			smoothing_factor = FAST_SMOOTHING_FACTOR;
+		else
+			smoothing_factor = SLOW_SMOOTHING_FACTOR;
+		current_bumped = *p_old_current_ua < new_current_ua / 1000 * 1000;
+		new_current_ua = (new_current_ua * smoothing_factor +
+				(*p_old_current_ua * (100 - smoothing_factor))) / 100;
+		/* Ceil/floor to the nearest mA, and also remove trivial noise. */
+		if (current_bumped && smoothing_factor != 100) // don't ceil whole value
+			new_current_ua = DIV_ROUND_UP(new_current_ua, 1000) * 1000;
+		else
+			new_current_ua = new_current_ua / 1000 * 1000;
+	} else
+		cw_bat->last_estimated_charging_current_time = 0;
+	if (*p_old_current_ua != new_current_ua) {
+		*p_old_current_ua = new_current_ua;
+		cw_bat->bat_change = 1;
+	}
+}
+
 static void rk_bat_update_capacity(struct cw_battery *cw_bat)
 {
 
@@ -773,15 +844,24 @@ static void cw_bat_work(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
 	struct cw_battery *cw_bat;
+	int old_capacity;
+	long old_run_time_capacity_change;
 
 
 	delay_work = container_of(work, struct delayed_work, work);
 	cw_bat = container_of(delay_work, struct cw_battery, battery_delay_work);
 
 	rk_bat_update_status(cw_bat);
+	old_capacity = cw_bat->capacity;
+	old_run_time_capacity_change = cw_bat->run_time_capacity_change;
 	rk_bat_update_capacity(cw_bat);
+	rk_bat_update_estimated_charging_current_ua(cw_bat, old_capacity,
+			old_run_time_capacity_change);
 	rk_bat_update_vol(cw_bat);
 	rk_bat_update_time_to_empty(cw_bat);
+
+	pr_debug("cw_bat->bat_change = %d, cw_bat->time_to_empty = %d, cw_bat->capacity = %d, cw_bat->voltage = %d\n", \
+						cw_bat->bat_change, cw_bat->time_to_empty, cw_bat->capacity, cw_bat->voltage);
 
 	if (cw_bat->bat_change) {
 		power_supply_changed(cw_bat->rk_bat);
@@ -789,9 +869,6 @@ static void cw_bat_work(struct work_struct *work)
 	}
 
 	queue_delayed_work(cw_bat->battery_workqueue, &cw_bat->battery_delay_work, msecs_to_jiffies(10000));
-
-	pr_debug("cw_bat->bat_change = %d, cw_bat->time_to_empty = %d, cw_bat->capacity = %d, cw_bat->voltage = %d\n", \
-						cw_bat->bat_change, cw_bat->time_to_empty, cw_bat->capacity, cw_bat->voltage);
 }
 
 static int rk_battery_get_property(struct power_supply *psy,
@@ -835,7 +912,9 @@ static int rk_battery_get_property(struct power_supply *psy,
 			/* estimate current based on time to empty */
 			val->intval = 60 * val->intval / cw_bat->time_to_empty;
 		} else {
-			val->intval = 0;
+			/* estimate the charging current speed, based on the battery design
+			 * capacity and SOC change over time. */
+			val->intval = cw_bat->estimated_charging_current_ua;
 		}
 		break;
 
