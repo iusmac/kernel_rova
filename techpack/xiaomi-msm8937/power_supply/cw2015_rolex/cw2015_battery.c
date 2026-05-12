@@ -116,7 +116,7 @@ static u8 config_info_feimaotui[SIZE_BATINFO] = {
 };
 
 
-
+static struct power_supply *charge_psy;
 
 /* write data to address */
 static int cw_i2c_write(
@@ -672,6 +672,21 @@ static bool cw_battery_valid_time_to_empty(struct cw_battery *cw_bat)
 		cw_bat->status == POWER_SUPPLY_STATUS_DISCHARGING;
 }
 
+static int power_supply_get_battery_charging_current_max_prop(
+		struct power_supply *psy)
+{
+	union power_supply_propval ret = {0,};
+
+	if (!psy) {
+		pr_err("power supply is NULL\n");
+		return -ENODEV;
+	}
+
+	power_supply_get_property(psy, POWER_SUPPLY_PROP_CURRENT_MAX, &ret);
+
+	return ret.intval;
+}
+
 static int cw_battery_measure_charging_current_ua(
 		int charge_full_design_uah,
 		int charge_start_sec,
@@ -696,9 +711,14 @@ static void rk_bat_update_estimated_charging_current_ua(
 	unsigned int new_current_ua = 0;
 	u8 smoothing_factor;
 	bool current_bumped;
+	int curr_max;
+
+	if (!charge_psy) charge_psy = power_supply_get_by_name("usb");
+	curr_max = power_supply_get_battery_charging_current_max_prop(charge_psy);
 
 	/* Estimate only when the charger is plugged in and not discharging. */
-	if (cw_bat->charger_mode > 0 && old_capacity <= cw_bat->capacity) {
+	if (cw_bat->charger_mode > 0 && curr_max
+			&& old_capacity <= cw_bat->capacity) {
 		/* Memoize the previous run time capacity change to estimate the speed
 		 * of this capacity jump. */
 		if (old_capacity < cw_bat->capacity)
@@ -768,7 +788,6 @@ static void rk_bat_update_vol(struct cw_battery *cw_bat)
 
 
 
-static struct power_supply *charge_psy;
 static u8 is_charger_plug;
 
 static int power_supply_get_battery_charge_state(struct power_supply *psy)
@@ -777,6 +796,7 @@ static int power_supply_get_battery_charge_state(struct power_supply *psy)
 
 	if (!psy) {
 		pr_err("power supply is NULL\n");
+		return -ENODEV;
 	}
 
 	power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &ret);
