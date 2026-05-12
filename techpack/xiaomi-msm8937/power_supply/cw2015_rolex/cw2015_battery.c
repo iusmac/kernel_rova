@@ -662,7 +662,8 @@ static int cw_get_time_to_empty(struct cw_battery *cw_bat)
 
 static bool cw_battery_valid_time_to_empty(struct cw_battery *cw_bat)
 {
-	return cw_bat->time_to_empty > 0 &&
+	return !cw_bat->charger_mode || // ALWAYS valid if no cable or s/w disabled
+		cw_bat->time_to_empty > 0 &&
 		cw_bat->time_to_empty < CW2015_MASK_SOC &&
 		cw_bat->status == POWER_SUPPLY_STATUS_DISCHARGING;
 }
