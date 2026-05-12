@@ -15,6 +15,14 @@
 #ifndef CONFIG_BATTERY_CW2015_ROLEX
 		qcom,battery-data = <&qrd_batterydata>;
 #endif
+		monitored-battery = <&bat>;
+	};
+
+	bat: battery {
+		compatible = "simple-battery";
+#ifdef CONFIG_SMB358_CHARGER_ROLEX
+		charge-full-design-microamp-hours = <3030000>;
+#endif
 	};
 
 #ifdef CONFIG_SMB358_CHARGER_ROLEX
