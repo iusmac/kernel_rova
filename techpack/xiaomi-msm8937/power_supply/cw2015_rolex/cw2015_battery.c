@@ -22,6 +22,7 @@
 #include <linux/time.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <linux/bits.h>
 
 #include <linux/pm_wakeup.h>
 
@@ -45,6 +46,7 @@
 
 #define CONFIG_UPDATE_FLG       	(0x1<<1)
 #define ATHD                    	(0x0<<3)
+#define CW2015_MASK_SOC         	GENMASK(12, 0)
 
 
 #define BATTERY_UP_MAX_CHANGE   	420
@@ -654,8 +656,15 @@ static int cw_get_time_to_empty(struct cw_battery *cw_bat)
 	if (ret < 0)
 		return ret;
 
-	value16 = ((value16 << 8) + reg_val) & 0x1fff;
+	value16 = ((value16 << 8) + reg_val) & CW2015_MASK_SOC;
 	return value16;
+}
+
+static bool cw_battery_valid_time_to_empty(struct cw_battery *cw_bat)
+{
+	return cw_bat->time_to_empty > 0 &&
+		cw_bat->time_to_empty < CW2015_MASK_SOC &&
+		cw_bat->status == POWER_SUPPLY_STATUS_DISCHARGING;
 }
 
 static void rk_bat_update_capacity(struct cw_battery *cw_bat)
@@ -805,7 +814,10 @@ static int rk_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW:
-		val->intval = cw_bat->time_to_empty;
+		if (cw_battery_valid_time_to_empty(cw_bat))
+			val->intval = cw_bat->time_to_empty;
+		else
+			val->intval = 0;
 		break;
 
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
