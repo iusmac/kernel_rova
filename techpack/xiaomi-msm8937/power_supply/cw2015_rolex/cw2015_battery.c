@@ -73,6 +73,7 @@ struct cw_battery {
 	struct delayed_work bat_low_wakeup_work;
 	const struct cw_bat_platform_data *plat_data;
 	struct power_supply *rk_bat;
+	struct power_supply_battery_info battery;
 	struct power_supply	*batt_psy;
 	struct power_supply_desc rk_bat_d;
 
@@ -825,6 +826,19 @@ static int rk_battery_get_property(struct power_supply *psy,
 		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
 		break;
 
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		if (cw_battery_valid_time_to_empty(cw_bat)) {
+			/* calculate remaining capacity */
+			val->intval = cw_bat->battery.charge_full_design_uah;
+			val->intval = val->intval * cw_bat->capacity / 100;
+
+			/* estimate current based on time to empty */
+			val->intval = 60 * val->intval / cw_bat->time_to_empty;
+		} else {
+			val->intval = 0;
+		}
+		break;
+
 	default:
 		break;
 	}
@@ -847,6 +861,7 @@ static enum power_supply_property rk_battery_properties[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
 };
 
 #if BAT_LOW_INTERRUPT
@@ -1218,6 +1233,14 @@ static int cw_bat_probe(struct i2c_client *client, const struct i2c_device_id *i
 		dev_err(&cw_bat->client->dev, "power supply register rk_bat error\n");
 		pr_debug("rk_bat_register_fail\n");
 		goto rk_bat_register_fail;
+	}
+
+	/* To resolve battery properties from devicetree */
+	cw_bat->rk_bat->of_node = (&client->dev)->of_node;
+	ret = power_supply_get_battery_info(cw_bat->rk_bat, &cw_bat->battery);
+	if (ret) {
+		dev_warn(&cw_bat->client->dev,
+			 "No monitored battery, some properties will be missing (ret=%d)\n", ret);
 	}
 
 	cw_bat->charger_mode = 0;
