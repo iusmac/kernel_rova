@@ -831,6 +831,14 @@ static int rk_battery_get_property(struct power_supply *psy,
 	return ret;
 }
 
+static void rk_battery_external_power_changed(struct power_supply *psy)
+{
+	struct cw_battery *cw_bat = power_supply_get_drvdata(psy);
+
+	pr_debug("%s\n", __func__);
+	mod_delayed_work(cw_bat->battery_workqueue, &cw_bat->battery_delay_work, 0);
+}
+
 static enum power_supply_property rk_battery_properties[] = {
 	POWER_SUPPLY_PROP_CAPACITY,
 
@@ -1202,6 +1210,7 @@ static int cw_bat_probe(struct i2c_client *client, const struct i2c_device_id *i
 	cw_bat->rk_bat_d.properties = rk_battery_properties;
 	cw_bat->rk_bat_d.num_properties = ARRAY_SIZE(rk_battery_properties);
 	cw_bat->rk_bat_d.get_property = rk_battery_get_property;
+	cw_bat->rk_bat_d.external_power_changed = rk_battery_external_power_changed;
 	cw_fg_psy_cfg.drv_data = cw_bat;
 	cw_fg_psy_cfg.num_supplicants = 0;
 	cw_bat->rk_bat = devm_power_supply_register(&client->dev, &cw_bat->rk_bat_d, &cw_fg_psy_cfg);
