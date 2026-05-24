@@ -1501,7 +1501,7 @@ static int smb358_set_usb_chg_current(struct smb358_charger *chip,
 		/* USB 3.0 - 900mA */
 		reg1 |= USB3_ENABLE_BIT;
 		reg2 |= CMD_B_CHG_USB_500_900_ENABLE_BIT;
-	} else if (current_ma > USB2_MAX_CURRENT_MA) {
+	} else if (current_ma != 2) {
 		/* HC mode  - if none of the above */
 		reg2 |= CMD_B_CHG_HC_ENABLE_BIT;
 
