@@ -702,6 +702,7 @@ static int cw_battery_measure_charging_current_ua(
 
 #define FAST_SMOOTHING_FACTOR 75 // in %
 #define SLOW_SMOOTHING_FACTOR 25 // in %
+#define BATTERY_ALLOW_ESTIMATION_MIN_TIME 180 // in seconds
 static void rk_bat_update_estimated_charging_current_ua(
 		struct cw_battery *cw_bat,
 		int old_capacity,
@@ -712,6 +713,8 @@ static void rk_bat_update_estimated_charging_current_ua(
 	u8 smoothing_factor;
 	bool current_bumped;
 	int curr_max;
+	long aconline_time;
+	bool allow_estimate;
 
 	if (!charge_psy) charge_psy = power_supply_get_by_name("usb");
 	curr_max = power_supply_get_battery_charging_current_max_prop(charge_psy);
@@ -728,9 +731,14 @@ static void rk_bat_update_estimated_charging_current_ua(
 				 * partial SOC updates (e.g., 50.9% > 51%) after system bootup
 				 * or when re-plugged, and wait for the next SOC update. */
 				? old_run_time_capacity_change : -1;
+		aconline_time = cw_bat->sleep_time_charge_start +
+			cw_bat->run_time_charge_start;
+		allow_estimate = (cw_bat->sleep_time_capacity_change +
+				cw_bat->run_time_capacity_change - aconline_time) >=
+			BATTERY_ALLOW_ESTIMATION_MIN_TIME;
 		/* Estimate the charging current speed, based on the battery design
 		 * capacity and SOC change over time. */
-		if (cw_bat->last_estimated_charging_current_time > 0)
+		if (allow_estimate && cw_bat->last_estimated_charging_current_time > 0)
 			new_current_ua = cw_battery_measure_charging_current_ua(
 					cw_bat->battery.charge_full_design_uah,
 					cw_bat->last_estimated_charging_current_time,
