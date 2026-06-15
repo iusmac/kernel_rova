@@ -1250,12 +1250,16 @@ static int smb358_get_prop_batt_capacity(struct smb358_charger *chip)
 static int get_prop_current_now(struct smb358_charger *chip)
 {
 	union power_supply_propval ret = {0,};
+	int current_now;
 
 	if (chip->bms_psy) {
 		power_supply_get_property(chip->bms_psy,
 			POWER_SUPPLY_PROP_CURRENT_NOW, &ret);
 			pr_debug("xujismbcur = %d\n", ret.intval);
-			return ret.intval;
+			current_now = ret.intval;
+			if (current_now > chip->fastchg_current_max_ma * 1000)
+				current_now = chip->psy_usb_ma * 1000;
+			return current_now;
 		} else {
 			pr_debug("No BMS supply registered return 0\n");
 		}

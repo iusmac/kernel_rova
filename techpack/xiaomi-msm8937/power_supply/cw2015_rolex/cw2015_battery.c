@@ -660,6 +660,21 @@ static bool cw_battery_valid_time_to_empty(struct cw_battery *cw_bat)
 		cw_bat->status == POWER_SUPPLY_STATUS_DISCHARGING;
 }
 
+static int power_supply_get_battery_charging_current_now_prop(
+		struct power_supply *psy)
+{
+	union power_supply_propval ret = {0,};
+
+	if (!psy) {
+		pr_err("power supply is NULL\n");
+		return -ENODEV;
+	}
+
+	power_supply_get_property(psy, POWER_SUPPLY_PROP_CURRENT_NOW, &ret);
+
+	return ret.intval;
+}
+
 static int power_supply_get_battery_charging_current_max_prop(
 		struct power_supply *psy)
 {
@@ -751,7 +766,13 @@ static void rk_bat_update_estimated_charging_current_ua(
 	} else
 		cw_bat->last_estimated_charging_current_time = 0;
 	if (*p_old_current_ua != new_current_ua) {
+		/* Overwrite the old value and let the power supply apply restrictions
+		 * on it (like max supported speed). */
 		*p_old_current_ua = new_current_ua;
+		if (cw_bat->batt_psy == NULL)
+			cw_bat->batt_psy = power_supply_get_by_name("battery");
+		*p_old_current_ua =
+			power_supply_get_battery_charging_current_now_prop(cw_bat->batt_psy);
 		cw_bat->bat_change = 1;
 	}
 }
