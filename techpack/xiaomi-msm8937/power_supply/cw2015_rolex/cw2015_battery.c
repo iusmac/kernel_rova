@@ -50,11 +50,10 @@
 
 
 #define BATTERY_UP_MAX_CHANGE   	420
+#define BATTERY_DOWN_MAX_CHANGE		120
 #define BATTERY_DOWN_CHANGE   	60
 #define BATTERY_DOWN_MIN_CHANGE_RUN 	30
 #define BATTERY_DOWN_MIN_CHANGE_SLEEP 	1800
-#define BATTERY_DOWN_MAX_CHANGE_RUN_AC_ONLINE 	1800
-
 
 
 #define BAT_LOW_INTERRUPT    	0
@@ -84,7 +83,9 @@ struct cw_battery {
 
 	long sleep_time_charge_start;
 	long run_time_charge_start;
-
+#ifdef CONFIG_PM
+	int suspend_resume_mark;
+#endif
 	int charger_mode;
 	int charger_init_mode;
 	int capacity;
@@ -377,31 +378,12 @@ static void cw_update_time_member_capacity_change(struct cw_battery *cw_bat)
 	cw_bat->sleep_time_capacity_change = new_sleep_time;
 }
 
-static int cw_quickstart(struct cw_battery *cw_bat)
-{
-	int ret = 0;
-	u8 reg_val = MODE_QUICK_START;
-
-	ret = cw_i2c_write(cw_bat->client, REG_MODE, &reg_val, 1);
-	if (ret < 0) {
-		dev_err(&cw_bat->client->dev, "Error quick start1\n");
-		return ret;
-	}
-
-	reg_val = MODE_NORMAL;
-	ret = cw_i2c_write(cw_bat->client, REG_MODE, &reg_val, 1);
-	if (ret < 0) {
-		dev_err(&cw_bat->client->dev, "Error quick start2\n");
-		return ret;
-	}
-	return 1;
-}
-
 static int cw_get_capacity(struct cw_battery *cw_bat)
 {
 
 	int ret;
 	u8 reg_val[2];
+	int cw_capacity;
 
 	struct timespec ts;
 	long new_run_time;
@@ -409,15 +391,10 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 	long capacity_or_aconline_time;
 	int allow_change;
 	int allow_capacity;
-	static int if_quickstart;
 	static int jump_flag;
-		static int jump_flag2;
 	static int reset_loop;
 	int charge_time;
 	u8 reset_val;
-
-
-
 
 	ret = cw_i2c_read(cw_bat->client, REG_SOC, reg_val, 2);
 	if (ret < 0)
@@ -462,47 +439,75 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 	get_monotonic_boottime(&ts);
 	new_sleep_time = ts.tv_sec - new_run_time;
 
-	if (((cw_bat->charger_mode > 0) && (cw_capacity <= (cw_bat->capacity - 1)) && (cw_capacity > (cw_bat->capacity - 30/*9*/)))
-				|| ((cw_bat->charger_mode == 0) && (cw_capacity == (cw_bat->capacity + 1)))) {
-
+	/* case 1 : avoid swing */
+	if (((cw_bat->charger_mode > 0) &&
+		 (cw_capacity <= cw_bat->capacity - 1) &&
+		 (cw_capacity > cw_bat->capacity - 30/*9*/)) ||
+		((cw_bat->charger_mode == 0) &&
+		 (cw_capacity == (cw_bat->capacity + 1)))) {
 		if (!(cw_capacity == 0 && cw_bat->capacity <= 2)) {
+			pr_debug("%s: Fixing swing. cw_capacity=%d, cw_bat_capacity=%d\n", __func__,
+					cw_capacity, cw_bat->capacity);
 			cw_capacity = cw_bat->capacity;
 		}
 	}
 
+	/* case 2 : avoid no charge full */
 	if ((cw_bat->charger_mode > 0) && (cw_capacity >= 95) && (cw_capacity <= cw_bat->capacity)) {
-
-		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ? cw_bat->sleep_time_capacity_change : cw_bat->sleep_time_charge_start;
-		capacity_or_aconline_time += (cw_bat->run_time_capacity_change > cw_bat->run_time_charge_start) ? cw_bat->run_time_capacity_change : cw_bat->run_time_charge_start;
+		pr_debug("%s: Fixing no charge full. cw_capacity=%d, cw_bat_capacity=%d\n",
+				__func__, cw_capacity, cw_bat->capacity);
+		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ?
+		                            cw_bat->sleep_time_capacity_change : cw_bat->sleep_time_charge_start;
+		capacity_or_aconline_time += (cw_bat->run_time_capacity_change > cw_bat->run_time_charge_start) ?
+		                            cw_bat->run_time_capacity_change : cw_bat->run_time_charge_start;
 		allow_change = (new_sleep_time + new_run_time - capacity_or_aconline_time) / BATTERY_UP_MAX_CHANGE;
 		if (allow_change > 0) {
-			allow_capacity = cw_bat->capacity + allow_change;
-			cw_capacity = (allow_capacity <= 100) ? allow_capacity : 100;
+			cw_capacity = (cw_bat->capacity + 1) <= 100 ? (cw_bat->capacity + 1) : 100;
 			jump_flag = 1;
-		} else if (cw_capacity <= cw_bat->capacity) {
-			cw_capacity = cw_bat->capacity;
-		}
-
-	} else if ((cw_bat->charger_mode == 0) && cw_bat->capacity == 100 && cw_capacity < cw_bat->capacity && jump_flag2 == 0) {
-		cw_capacity = cw_bat->capacity;
-		jump_flag2 = 1;
-	} else if ((cw_bat->charger_mode == 0) && (cw_capacity <= cw_bat->capacity) && (cw_capacity >= 90) && ((jump_flag == 1) || (jump_flag2 == 1))) {
-		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ? cw_bat->sleep_time_capacity_change : cw_bat->sleep_time_charge_start;
-		capacity_or_aconline_time += (cw_bat->run_time_capacity_change > cw_bat->run_time_charge_start) ? cw_bat->run_time_capacity_change : cw_bat->run_time_charge_start;
-		allow_change = (new_sleep_time + new_run_time - capacity_or_aconline_time) / BATTERY_DOWN_CHANGE;
-		if (allow_change > 0) {
-			allow_capacity = cw_bat->capacity - allow_change;
-			if (cw_capacity >= allow_capacity) {
-				jump_flag = 0;
-				jump_flag2 = 0;
-			} else{
-				cw_capacity = (allow_capacity <= 100) ? allow_capacity : 100;
-			}
-		} else if (cw_capacity <= cw_bat->capacity) {
+		} else {
 			cw_capacity = cw_bat->capacity;
 		}
 	}
 
+	/* case 3 : avoid battery level jump to CW_BAT */
+	if ((cw_bat->charger_mode == 0) &&
+		(cw_capacity <= cw_bat->capacity) &&
+		(cw_capacity >= 90) && (jump_flag == 1)) {
+		pr_debug("%s: Fixing cw_capacity (%d) jump to cw_bat_capacity (%d)\n",
+				__func__, cw_capacity, cw_bat->capacity);
+		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ?
+		                            cw_bat->sleep_time_capacity_change : cw_bat->sleep_time_charge_start;
+		capacity_or_aconline_time += (cw_bat->run_time_capacity_change > cw_bat->run_time_charge_start) ?
+		                            cw_bat->run_time_capacity_change : cw_bat->run_time_charge_start;
+#ifdef CONFIG_PM
+		if (cw_bat->suspend_resume_mark == 1) {
+			cw_bat->suspend_resume_mark = 0;
+			allow_change = (new_sleep_time + new_run_time -
+							capacity_or_aconline_time) / BATTERY_DOWN_CHANGE;
+			if (allow_change > 0) {
+				allow_capacity = cw_bat->capacity - allow_change;
+				if (cw_capacity >= allow_capacity) {
+					return cw_capacity;
+				}
+				return (allow_capacity <= 100) ? allow_capacity : 100;
+			} else if (cw_capacity <= cw_bat->capacity) {
+				return cw_bat->capacity;
+			}
+		}
+#endif
+		allow_change = (new_sleep_time + new_run_time -
+						capacity_or_aconline_time) / BATTERY_DOWN_MAX_CHANGE;
+		if (allow_change > 0) {
+			if (cw_capacity >= cw_bat->capacity - 1)
+				jump_flag = 0;
+			else
+				cw_capacity = cw_bat->capacity - 1;
+		} else {
+			cw_capacity = cw_bat->capacity;
+		}
+	}
+
+	/* case 4: avoid battery level jump to 0% at a moment from more than 2% */
 	if ((cw_capacity == 0) && (cw_bat->capacity > 1)) {
 		allow_change = ((new_run_time - cw_bat->run_time_capacity_change) / BATTERY_DOWN_MIN_CHANGE_RUN);
 		allow_change += ((new_sleep_time - cw_bat->sleep_time_capacity_change) / BATTERY_DOWN_MIN_CHANGE_SLEEP);
@@ -510,18 +515,25 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 		allow_capacity = cw_bat->capacity - allow_change;
 		cw_capacity = (allow_capacity >= cw_capacity) ? allow_capacity : cw_capacity;
 		pr_debug("report GGIC POR happened");
-		reg_val[0] = MODE_NORMAL;
-		ret = cw_i2c_write(cw_bat->client, REG_MODE, reg_val, 1);
+		reset_val = MODE_SLEEP;
+		ret = cw_i2c_write(cw_bat->client, REG_MODE, &reset_val, 1);
+		if (ret < 0)
+			return ret;
+		reset_val = MODE_NORMAL;
+		msleep(10);
+		ret = cw_i2c_write(cw_bat->client, REG_MODE, &reset_val, 1);
 		if (ret < 0)
 			return ret;
 		pr_debug("report battery capacity jump 0 ");
 	}
 
-#if 1
+	/* case 5 : avoid battery level is 0% when long time charging */
 	if ((cw_bat->charger_mode > 0) && (cw_capacity == 0)) {
-		charge_time = new_sleep_time + new_run_time - cw_bat->sleep_time_charge_start - cw_bat->run_time_charge_start;
-		if ((charge_time > BATTERY_DOWN_MAX_CHANGE_RUN_AC_ONLINE) && (if_quickstart == 0)) {
-			cw_quickstart(cw_bat);
+		allow_change = ((new_run_time - cw_bat->run_time_capacity_change) /
+						BATTERY_DOWN_MIN_CHANGE_RUN);
+		allow_change += ((new_sleep_time - cw_bat->sleep_time_capacity_change)
+						/ BATTERY_DOWN_MIN_CHANGE_SLEEP);
+		if (allow_change > 0) {
 			reset_val = MODE_SLEEP;
 			ret = cw_i2c_write(cw_bat->client, REG_MODE, &reset_val, 1);
 			if (ret < 0)
@@ -536,35 +548,11 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 			if (ret)
 				return ret;
 			pr_debug("report battery capacity still 0 if in changing");
-			if_quickstart = 1;
 		}
-	} else if ((if_quickstart == 1) && (cw_bat->charger_mode == 0)) {
-		if_quickstart = 0;
 	}
-
-#endif
-
-#ifdef SYSTEM_SHUTDOWN_VOLTAGE
-	if ((cw_bat->charger_mode == 0) && (cw_capacity <= 20) && (cw_bat->voltage <= SYSTEM_SHUTDOWN_VOLTAGE)) {
-		if (if_quickstart == 10) {
-
-			allow_change = ((new_run_time - cw_bat->run_time_capacity_change) / BATTERY_DOWN_MIN_CHANGE_RUN);
-			allow_change += ((new_sleep_time - cw_bat->sleep_time_capacity_change) / BATTERY_DOWN_MIN_CHANGE_SLEEP);
-
-			allow_capacity = cw_bat->capacity - allow_change;
-			cw_capacity = (allow_capacity >= 0) ? allow_capacity : 0;
-
-			if (cw_capacity < 1) {
-				cw_quickstart(cw_bat);
-				if_quickstart = 12;
-				cw_capacity = 0;
-			}
-		} else if (if_quickstart <= 10)
-			if_quickstart = if_quickstart+2;
-		pr_debug("the cw201x voltage is less than SYSTEM_SHUTDOWN_VOLTAGE !!!!!!!, funciton: %s, line: %d\n", __func__, __LINE__);
-	} else if ((cw_bat->charger_mode > 0) && (if_quickstart <= 12)) {
-		if_quickstart = 0;
-	}
+#ifdef CONFIG_PM
+	if (cw_bat->suspend_resume_mark == 1)
+		cw_bat->suspend_resume_mark = 0;
 #endif
 	return cw_capacity;
 }
@@ -891,6 +879,11 @@ static void cw_bat_work(struct work_struct *work)
 	pr_debug("cw_bat->bat_change = %d, cw_bat->time_to_empty = %d, cw_bat->capacity = %d, cw_bat->voltage = %d\n", \
 						cw_bat->bat_change, cw_bat->time_to_empty, cw_bat->capacity, cw_bat->voltage);
 
+#ifdef CONFIG_PM
+	if (cw_bat->suspend_resume_mark == 1)
+		cw_bat->suspend_resume_mark = 0;
+#endif
+
 	if (cw_bat->bat_change) {
 		power_supply_changed(cw_bat->rk_bat);
 		cw_bat->bat_change = 0;
@@ -1015,6 +1008,7 @@ static int cw_bat_resume(struct device *dev)
 	struct i2c_client *client = to_i2c_client(dev);
 	struct cw_battery *cw_bat = i2c_get_clientdata(client);
 	pr_debug("%s\n", __func__);
+	cw_bat->suspend_resume_mark = 1;
 	queue_delayed_work(cw_bat->battery_workqueue, &cw_bat->battery_delay_work, msecs_to_jiffies(1));
 		pr_debug("cw_bat->capacity:%d\n", cw_bat->capacity);
 		return 0;
@@ -1350,6 +1344,7 @@ static int cw_bat_probe(struct i2c_client *client, const struct i2c_device_id *i
 			 "No monitored battery, some properties will be missing (ret=%d)\n", ret);
 	}
 
+	cw_bat->suspend_resume_mark = 0;
 	cw_bat->charger_mode = 0;
 	cw_bat->capacity = 0;
 	cw_bat->voltage = 0;
