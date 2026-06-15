@@ -1259,6 +1259,9 @@ static int get_prop_current_now(struct smb358_charger *chip)
 			current_now = ret.intval;
 			if (current_now > chip->fastchg_current_max_ma * 1000)
 				current_now = chip->psy_usb_ma * 1000;
+			if (thermal)
+				current_now = min(current_now,
+						chip->thermal_mitigation[chip->therm_lvl_sel] * 1000);
 			return current_now;
 		} else {
 			pr_debug("No BMS supply registered return 0\n");
