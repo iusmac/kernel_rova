@@ -441,9 +441,8 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 
 	/* case 1 : avoid swing */
 	if (((cw_bat->charger_mode > 0) &&
-		 ((cw_capacity <= cw_bat->capacity - 1) &&
+		 (cw_capacity <= cw_bat->capacity - 1) &&
 		 (cw_capacity > cw_bat->capacity - 30/*9*/)) ||
-		 (cw_capacity >= cw_bat->capacity + 5 && cw_bat->capacity != 0)) ||
 		((cw_bat->charger_mode == 0) &&
 		 (cw_capacity > cw_bat->capacity && cw_bat->capacity != 0))) {
 		if (!(cw_capacity == 0 && cw_bat->capacity <= 2)) {
@@ -453,8 +452,9 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 		}
 	}
 
-	/* case 2 : avoid no charge full */
-	if ((cw_bat->charger_mode > 0) && (cw_capacity >= 95) && (cw_capacity <= cw_bat->capacity)) {
+	/* case 2 : avoid no charge full or smooth swings by 5% or more */
+	if ((cw_bat->charger_mode > 0) && (((cw_capacity >= 95) && (cw_capacity <= cw_bat->capacity))
+			|| (cw_capacity >= cw_bat->capacity + 5))) {
 		pr_debug("%s: Fixing no charge full. cw_capacity=%d, cw_bat_capacity=%d\n",
 				__func__, cw_capacity, cw_bat->capacity);
 		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ?
@@ -472,8 +472,7 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 
 	/* case 3 : avoid battery level jump to CW_BAT */
 	if ((cw_bat->charger_mode == 0) &&
-		(cw_capacity <= cw_bat->capacity) &&
-		(cw_capacity >= 90) && (jump_flag == 1)) {
+		(cw_capacity <= cw_bat->capacity) && (jump_flag == 1)) {
 		pr_debug("%s: Fixing cw_capacity (%d) jump to cw_bat_capacity (%d)\n",
 				__func__, cw_capacity, cw_bat->capacity);
 		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ?
