@@ -393,7 +393,7 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 	int allow_capacity;
 	static int jump_flag;
 	static int reset_loop;
-	int charge_time;
+	int battery_up_max_change = BATTERY_UP_MAX_CHANGE;
 	u8 reset_val;
 
 	ret = cw_i2c_read(cw_bat->client, REG_SOC, reg_val, 2);
@@ -453,7 +453,7 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 	}
 
 	/* case 2 : avoid no charge full or smooth swings by 5% or more */
-	if ((cw_bat->charger_mode > 0) && (((cw_capacity >= 95) && (cw_capacity <= cw_bat->capacity))
+	if ((cw_bat->charger_mode > 0) && ((cw_capacity >= 95)
 			|| (cw_capacity >= cw_bat->capacity + 5))) {
 		pr_debug("%s: Fixing no charge full. cw_capacity=%d, cw_bat_capacity=%d\n",
 				__func__, cw_capacity, cw_bat->capacity);
@@ -461,7 +461,14 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 		                            cw_bat->sleep_time_capacity_change : cw_bat->sleep_time_charge_start;
 		capacity_or_aconline_time += (cw_bat->run_time_capacity_change > cw_bat->run_time_charge_start) ?
 		                            cw_bat->run_time_capacity_change : cw_bat->run_time_charge_start;
-		allow_change = (new_sleep_time + new_run_time - capacity_or_aconline_time) / BATTERY_UP_MAX_CHANGE;
+		/* Progressively scale up the waiting time (BATTERY_UP_MAX_CHANGE) as
+		 * we approach 100% to prevent premature full charge while the
+		 * PMIC/charger is still pushing current */
+		if (cw_bat->capacity >= 95 && cw_capacity >= 95) {
+			battery_up_max_change *= (cw_bat->capacity + 1 - 95)
+				+ (cw_capacity + cw_bat->capacity) / 2 - 95;
+		}
+		allow_change = (new_sleep_time + new_run_time - capacity_or_aconline_time) / battery_up_max_change;
 		if (allow_change > 0) {
 			cw_capacity = (cw_bat->capacity + 1) <= 100 ? (cw_bat->capacity + 1) : 100;
 			jump_flag = 1;
