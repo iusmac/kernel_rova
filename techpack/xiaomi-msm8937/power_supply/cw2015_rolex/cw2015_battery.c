@@ -49,7 +49,7 @@
 #define CW2015_MASK_SOC         	GENMASK(12, 0)
 
 
-#define BATTERY_UP_MAX_CHANGE   	420
+#define BATTERY_UP_MAX_CHANGE   	180
 #define BATTERY_DOWN_MAX_CHANGE		120
 #define BATTERY_DOWN_CHANGE   	60
 #define BATTERY_DOWN_MIN_CHANGE_RUN 	30
@@ -103,6 +103,8 @@ struct cw_battery {
 
 	unsigned int estimated_charging_current_ua;
 	long last_estimated_charging_current_time;
+
+	struct notifier_block charger_nb;
 };
 
 
@@ -463,17 +465,24 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 		                            cw_bat->run_time_capacity_change : cw_bat->run_time_charge_start;
 		/* Progressively scale up the waiting time (BATTERY_UP_MAX_CHANGE) as
 		 * we approach 100% to prevent premature full charge while the
-		 * PMIC/charger is still pushing current */
-		if (cw_bat->capacity >= 95 && cw_capacity >= 95) {
-			battery_up_max_change *= (cw_bat->capacity + 1 - 95)
-				+ (cw_capacity + cw_bat->capacity) / 2 - 95;
-		}
-		allow_change = (new_sleep_time + new_run_time - capacity_or_aconline_time) / battery_up_max_change;
-		if (allow_change > 0) {
-			cw_capacity = (cw_bat->capacity + 1) <= 100 ? (cw_bat->capacity + 1) : 100;
+		 * PMIC/charger is still pushing current, otherwise jump straight to
+		 * 100% when close enough and status is already full as of BMS */
+		if (DIV_ROUND_UP(cw_capacity + cw_bat->capacity + 1, 2) >= 98 &&
+				cw_bat->status == POWER_SUPPLY_STATUS_FULL) {
+			pr_debug("%s: Fully charged (BMS)\n", __func__);
+			cw_capacity = 100;
 			jump_flag = 1;
 		} else {
-			cw_capacity = cw_bat->capacity;
+			if (cw_bat->capacity >= 95 && cw_capacity >= 95)
+				battery_up_max_change *= (cw_bat->capacity + 1 - 95)
+					+ (cw_capacity + cw_bat->capacity) / 2 - 95;
+			allow_change = (new_sleep_time + new_run_time - capacity_or_aconline_time) / battery_up_max_change;
+			if (allow_change > 0) {
+				cw_capacity = (cw_bat->capacity + 1) <= 100 ? (cw_bat->capacity + 1) : 100;
+				jump_flag = 1;
+			} else {
+				cw_capacity = cw_bat->capacity;
+			}
 		}
 	}
 
@@ -981,6 +990,34 @@ static void rk_battery_external_power_changed(struct power_supply *psy)
 	mod_delayed_work(cw_bat->battery_workqueue, &cw_bat->battery_delay_work, 0);
 }
 
+static int cw_bat_charger_notify(struct notifier_block *nb,
+				      unsigned long val, void *v)
+{
+	struct power_supply *psy = v;
+	struct cw_battery *cw_bat = container_of(nb, struct cw_battery, charger_nb);
+
+	if (!psy || !psy->desc)
+		goto out;
+
+	pr_debug("%s(val=%lu) : psy=%s type=%d\n", __func__, val, psy->desc->name,
+			psy->desc->type);
+
+	// Ignore evens not related to this battery
+	if (psy->desc->type != POWER_SUPPLY_TYPE_BATTERY)
+		goto out;
+
+	// Ignore events from this battery driver (battery management system)
+	if (!strcmp(psy->desc->name, "bms"))
+		goto out;
+
+	if (val == PSY_EVENT_PROP_CHANGED)
+		mod_delayed_work(cw_bat->battery_workqueue,
+				&cw_bat->battery_delay_work, 0);
+
+out:
+	return NOTIFY_OK;
+}
+
 static enum power_supply_property rk_battery_properties[] = {
 	POWER_SUPPLY_PROP_CAPACITY,
 
@@ -1372,6 +1409,14 @@ static int cw_bat_probe(struct i2c_client *client, const struct i2c_device_id *i
 			 "No monitored battery, some properties will be missing (ret=%d)\n", ret);
 	}
 
+	cw_bat->charger_nb.notifier_call = cw_bat_charger_notify;
+	cw_bat->charger_nb.priority = 0;
+	ret = power_supply_reg_notifier(&cw_bat->charger_nb);
+	if (ret) {
+		dev_warn(&cw_bat->client->dev,
+			"Failed to register power supply notifier(ret=%d)\n", ret);
+	}
+
 	cw_bat->suspend_resume_mark = 0;
 	cw_bat->charger_mode = 0;
 	cw_bat->capacity = 0;
@@ -1458,6 +1503,7 @@ static int cw_bat_remove(struct i2c_client *client)
 	struct cw_battery *cw_bat = i2c_get_clientdata(client);
 	pr_debug("%s\n", __func__);
 	cancel_delayed_work(&cw_bat->battery_delay_work);
+	power_supply_unreg_notifier(&cw_bat->charger_nb);
 	return 0;
 }
 

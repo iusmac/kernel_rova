@@ -24,6 +24,7 @@
 #include <linux/module.h>
 #include <linux/gpio.h>
 #include <linux/regulator/consumer.h>
+#include <linux/notifier.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
