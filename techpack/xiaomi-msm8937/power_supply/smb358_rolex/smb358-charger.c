@@ -269,6 +269,7 @@ struct smb358_charger {
 	int			irq_gpio;
 	int			charging_disabled;
 	int			fastchg_current_max_ma;
+	unsigned long		batt_full_settle_jiffies;
 
 	int			psy_usb_ma;
 
@@ -1189,10 +1190,12 @@ static enum power_supply_property smb358_battery_properties[] = {
 };
 
 static int smb358_get_prop_batt_capacity(struct smb358_charger *chip);
+static int bound_soc(int soc);
 static int smb358_get_prop_batt_status(struct smb358_charger *chip)
 {
-	int rc;
+	int rc, soc;
 	u8 reg = 0;
+	soc = bound_soc(smb358_get_prop_batt_capacity(chip));
 
 	rc = smb358_read_reg(chip, STATUS_C_REG, &reg);
 	pr_debug("XXX::smb358_get_prop_batt_status:reg=0x%x\r\n", reg);
@@ -1203,8 +1206,21 @@ static int smb358_get_prop_batt_status(struct smb358_charger *chip)
 
 	pr_debug("%s: STATUS_C_REG=%x\n", __func__, reg);
 
-	if ((chip->batt_full) && chip->chg_present && chip->power_ok)
-		return POWER_SUPPLY_STATUS_FULL;
+	if ((chip->batt_full) && chip->chg_present && chip->power_ok) {
+		if (chip->batt_full_settle_jiffies == 0)
+			chip->batt_full_settle_jiffies = jiffies ? jiffies : 1;
+
+		pr_debug("%s: jiffies=%lu, batt_full_settle_jiffies=%lu\n", __func__,
+				jiffies, chip->batt_full_settle_jiffies);
+
+		if (soc == 100 || time_after(jiffies, chip->batt_full_settle_jiffies +
+					msecs_to_jiffies(90 * 1000)))
+			return POWER_SUPPLY_STATUS_FULL;
+		else /* H/W is bouncing/settling. Mask it from the system for now. */
+			return POWER_SUPPLY_STATUS_CHARGING;
+	} else {
+		chip->batt_full_settle_jiffies = 0;
+	}
 
 	if ((reg & STATUS_C_CHARGING_MASK) &&
 			!(reg & STATUS_C_CHG_ERR_STATUS_BIT))
@@ -1215,8 +1231,7 @@ static int smb358_get_prop_batt_status(struct smb358_charger *chip)
 	/* Chip is about to auto-recharge, so avoid STATUS_DISCHARGING and smooth
 	 * the transition from STATUS_FULL to STATUS_CHARGING in userspace. */
 	if (chip->power_ok && !chip->recharge_disabled &&
-			!(chip->charging_disabled_status & (USER | CURRENT)) &&
-			smb358_get_prop_batt_capacity(chip) == 100)
+			!(chip->charging_disabled_status & (USER | CURRENT)) && soc == 100)
 		return POWER_SUPPLY_STATUS_FULL;
 
 	return POWER_SUPPLY_STATUS_DISCHARGING;
@@ -3004,6 +3019,7 @@ static int determine_initial_state(struct smb358_charger *chip)
 		goto fail_init_status;
 	}
 	chip->batt_full = (reg & IRQ_C_TERM_BIT) ? true : false;
+	chip->batt_full_settle_jiffies = chip->batt_full ? jiffies : 0;
 
 	rc = smb358_read_reg(chip, IRQ_A_REG, &reg);
 	if (rc < 0) {
