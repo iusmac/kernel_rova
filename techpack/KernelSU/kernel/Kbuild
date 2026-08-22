@@ -84,8 +84,8 @@ KSU_GIT_VERSION_VALID := 1
 # $(info -- KernelSU-Next Git repo detected at: $(GIT_ROOT))
 # endif
 # endif
-KSU_GIT_VERSION := 2979
-KSU_GIT_TAG := "v3.2.0"
+KSU_GIT_VERSION := 2993
+KSU_GIT_TAG := "v3.2.0-legacy"
 
 # Calculate version if git version is available
 ifdef KSU_GIT_VERSION_VALID
