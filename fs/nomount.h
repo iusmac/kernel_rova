@@ -18,40 +18,25 @@
 #define NOMOUNT_VERSION    10
 #define NOMOUNT_HASH_BITS  12
 #define NOMOUNT_UID_HASH_BITS 4
-#define NM_FLAG_IS_DIR (1 << 1)
+#define NM_FLAG_IS_DIR      (1 << 1)
+#define NM_INO_TYPE_REAL    (1 << 0)
+#define NM_INO_TYPE_VIRTUAL (1 << 1)
+#define NM_INO_TYPE_DIR     (1 << 2)
 
-static DEFINE_HASHTABLE(nomount_dirs_ht,           NOMOUNT_HASH_BITS);
-static DEFINE_HASHTABLE(nomount_rules_by_vpath,    NOMOUNT_HASH_BITS);
-static DEFINE_HASHTABLE(nomount_rules_by_real_ino, NOMOUNT_HASH_BITS);
-static DEFINE_HASHTABLE(nomount_rules_by_v_ino,    NOMOUNT_HASH_BITS);
-static DEFINE_HASHTABLE(nomount_basenames_ht,      NOMOUNT_HASH_BITS);
-static DEFINE_HASHTABLE(nomount_uid_ht,            NOMOUNT_UID_HASH_BITS);
+static DEFINE_HASHTABLE(nomount_rules_ht,     NOMOUNT_HASH_BITS);
+static DEFINE_HASHTABLE(nomount_inodes_ht,    NOMOUNT_HASH_BITS);
+static DEFINE_HASHTABLE(nomount_basenames_ht, NOMOUNT_HASH_BITS);
+static DEFINE_HASHTABLE(nomount_uid_ht,       NOMOUNT_UID_HASH_BITS);
 static LIST_HEAD(nomount_rules_list);
 static LIST_HEAD(nomount_private_dirs_list);
 static DEFINE_MUTEX(nomount_write_mutex);
 
-struct nomount_rule {
-    struct list_head list;
-    struct hlist_node v_ino_node;
-    struct hlist_node real_ino_node;
-    struct hlist_node vpath_node;
-    struct hlist_node basename_node;
-    char *virtual_path;
-    char *real_path;
-    const char *basename;
-    unsigned long v_ino;
-    unsigned long real_ino;
-    unsigned long parent_ino;
-    u32 v_fs_type;
-    u32 v_hash;
-    u32 b_hash;
-    dev_t v_dev;
-    dev_t real_dev;
-    dev_t parent_dev;
-    u16 vp_len;
-    u16 rp_len;
-    u16 b_len;
-    u8  flags;
+struct nm_inode_node {
+    struct hlist_node node;
+    unsigned long ino;
+    dev_t dev;
+    u8 type;
+    u16 len;
 };
 
 struct nomount_child_name {
@@ -69,14 +54,28 @@ struct nm_child_array {
 };
 
 struct nomount_dir_node {
-    struct hlist_node node;
+    struct nm_inode_node dir;
     struct list_head private_list;
     struct nm_child_array __rcu *child_array; 
     char *dir_path;
-    unsigned long dir_ino;
-    dev_t dir_dev;
-    u16 dir_path_len;
     bool is_private;
+};
+
+struct nomount_rule {
+    struct list_head list;
+    struct nm_inode_node real_node; 
+    struct nm_inode_node virt_node;
+    struct hlist_node vpath_node;
+    struct hlist_node basename_node;
+    struct nomount_dir_node *parent_dir;
+    char *virtual_path;
+    char *real_path;
+    const char *basename;
+    u32 v_fs_type;
+    u32 v_hash;
+    u32 b_hash;
+    u16 b_len;
+    u8  flags;
 };
 
 struct nomount_uid_node {
