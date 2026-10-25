@@ -454,9 +454,8 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 		}
 	}
 
-	/* case 2 : avoid no charge full or smooth swings by 5% or more */
-	if ((cw_bat->charger_mode > 0) && ((cw_capacity >= 95)
-			|| (cw_capacity >= cw_bat->capacity + 5))) {
+	/* case 2 : avoid no charge full */
+	if ((cw_bat->charger_mode > 0) && (cw_capacity >= 95) && (cw_bat->capacity >= 95)) {
 		pr_debug("%s: Fixing no charge full. cw_capacity=%d, cw_bat_capacity=%d\n",
 				__func__, cw_capacity, cw_bat->capacity);
 		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ?
@@ -467,15 +466,13 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 		 * we approach 100% to prevent premature full charge while the
 		 * PMIC/charger is still pushing current, otherwise jump straight to
 		 * 100% when close enough and status is already full as of BMS */
+		battery_up_max_change *= (cw_bat->capacity + 1 - 95) + (cw_capacity + cw_bat->capacity) / 2 - 95;
 		if (DIV_ROUND_UP(cw_capacity + cw_bat->capacity + 1, 2) >= 98 &&
 				cw_bat->status == POWER_SUPPLY_STATUS_FULL) {
 			pr_debug("%s: Fully charged (BMS)\n", __func__);
 			cw_capacity = 100;
 			jump_flag = 1;
 		} else {
-			if (cw_bat->capacity >= 95 && cw_capacity >= 95)
-				battery_up_max_change *= (cw_bat->capacity + 1 - 95)
-					+ (cw_capacity + cw_bat->capacity) / 2 - 95;
 			allow_change = (new_sleep_time + new_run_time - capacity_or_aconline_time) / battery_up_max_change;
 			if (allow_change > 0) {
 				cw_capacity = (cw_bat->capacity + 1) <= 100 ? (cw_bat->capacity + 1) : 100;
@@ -488,7 +485,8 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 
 	/* case 3 : avoid battery level jump to CW_BAT */
 	if ((cw_bat->charger_mode == 0) &&
-		(cw_capacity <= cw_bat->capacity) && (jump_flag == 1)) {
+		(cw_capacity <= cw_bat->capacity) &&
+		(cw_capacity >= 90) && (jump_flag == 1)) {
 		pr_debug("%s: Fixing cw_capacity (%d) jump to cw_bat_capacity (%d)\n",
 				__func__, cw_capacity, cw_bat->capacity);
 		capacity_or_aconline_time = (cw_bat->sleep_time_capacity_change > cw_bat->sleep_time_charge_start) ?
